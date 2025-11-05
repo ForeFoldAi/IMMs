@@ -117,6 +117,7 @@ export const MaterialsTab = () => {
   const [materialCategories, setMaterialCategories] = useState<MaterialCategory[]>([]);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isExporting, setIsExporting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Fetch materials from API
   const fetchMaterials = async (page = 1, limit = 10, customSortField?: SortField, customSortOrder?: SortOrder) => {
@@ -207,6 +208,18 @@ export const MaterialsTab = () => {
       setError(errorMessage);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle refresh
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await fetchMaterials(currentPage, itemsPerPage, sortField, sortOrder);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -710,6 +723,9 @@ export const MaterialsTab = () => {
         onExport={exportToCSV}
         isExporting={isExporting}
         showExport={true}
+        onRefresh={handleRefresh}
+        isRefreshing={isRefreshing}
+        showRefresh={true}
         onAdd={() => setIsAddMaterialOpen(true)}
         addLabel='Add New Material'
         showAddButton={currentUser?.role !== 'company_owner'}

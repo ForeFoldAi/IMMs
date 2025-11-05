@@ -7,11 +7,12 @@ import materialsApi from './materials';
 import materialIndentsApi from './material-indents';
 import materialIssuesApi from './material-issues';
 import materialPurchasesApi from './materials-purchases';
+import fleetApi from './fleet';
 
-export { api, authService, machinesApi, machineTypesApi, branchesApi, materialsApi, materialIndentsApi, materialIssuesApi, materialPurchasesApi };
+export { api, authService, machinesApi, machineTypesApi, branchesApi, materialsApi, materialIndentsApi, materialIssuesApi, materialPurchasesApi, fleetApi };
 
 // Re-export types
-export * from './types.d';
+export * from './types';
 
 export default {
   api,
@@ -23,4 +24,5 @@ export default {
   materialIndents: materialIndentsApi,
   materialIssues: materialIssuesApi,
   materialPurchases: materialPurchasesApi,
+  fleet: fleetApi,
 };

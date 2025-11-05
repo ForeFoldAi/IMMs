@@ -1,7 +1,7 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { TopHeaderSimple } from "./TopHeaderSimple";
 import { Sidebar } from "./Sidebar";
-import { LogOut, Menu, Home, Package, List, ChevronDown , LayoutDashboard, Bell} from "lucide-react";
+import { LogOut, Menu, Home, Package, List, ChevronDown , LayoutDashboard, Bell, Truck} from "lucide-react";
 import { Button } from "./ui/button";
 import { RoleSwitcher } from "./RoleSwitcher";
 import { useRole } from "../contexts/RoleContext";
@@ -131,6 +131,12 @@ export const Layout = () => {
         icon: Package,
         permission: 'inventory:materials:read',
       },
+      {
+        to: '/fleet-management',
+        label: 'Fleet Management',
+        icon: Truck,
+        permission: isCompanyLevel() ? null : 'inventory:material-indents:create', // Company owners have access regardless of permission
+      },
      
     ];
 
@@ -165,7 +171,7 @@ export const Layout = () => {
             <img 
               src="/logo.png" 
               alt="Sree Sai Logo" 
-              className="h-10 w-auto object-contain"
+              className="h-10 w-auto object-contain rounded-lg shadow-lg"
             />
           </div>
 

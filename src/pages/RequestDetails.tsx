@@ -46,8 +46,8 @@ import type {
   ApproveRejectMaterialIndentRequest,
   ReceiveMaterialPurchaseItemRequest,
   MaterialPurchaseItem,
-} from '../lib/api/types.d';
-import { PurposeType } from '../lib/api/types.d';
+} from '../lib/api/types';
+import { PurposeType } from '../lib/api/types';
 import { Badge } from '../components/ui/badge';
 
 interface VendorQuotation {

@@ -155,6 +155,7 @@ const MaterialRequest = () => {
   const [availableMaterials, setAvailableMaterials] = useState<Material[]>([]);
   const [isLoadingMaterials, setIsLoadingMaterials] = useState(false);
   const [materialsError, setMaterialsError] = useState<string | null>(null);
+  const [materialSearchTerm, setMaterialSearchTerm] = useState('');
 
   const [availableMachines, setAvailableMachines] = useState<Machine[]>([]);
   const [isLoadingMachines, setIsLoadingMachines] = useState(false);
@@ -184,11 +185,24 @@ const MaterialRequest = () => {
     return unit?.name || '';
   };
 
-  // Return materials sorted alphabetically (branch filtering is handled at API level)
+  // Return materials sorted alphabetically with search filtering
   const getFilteredMaterials = () => {
     console.log('MaterialRequest: Returning materials from API (branch filtering handled server-side)');
+    
+    let filteredMaterials = [...availableMaterials];
+    
+    // Apply search filter if search term exists
+    if (materialSearchTerm.trim()) {
+      const searchLower = materialSearchTerm.toLowerCase();
+      filteredMaterials = filteredMaterials.filter(material => 
+        material.name.toLowerCase().includes(searchLower) ||
+        material.makerBrand?.toLowerCase().includes(searchLower) ||
+        material.specifications?.toLowerCase().includes(searchLower)
+      );
+    }
+    
     // Sort materials alphabetically by name
-    return [...availableMaterials].sort((a, b) => 
+    return filteredMaterials.sort((a, b) => 
       a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
     );
   };
@@ -408,6 +422,9 @@ const MaterialRequest = () => {
             : item
         )
       );
+      
+      // Clear search term after selection
+      setMaterialSearchTerm('');
     }
   };
 
@@ -509,9 +526,9 @@ const MaterialRequest = () => {
         prev.map((item) =>
           item.id === currentItemId
             ? {
-              ...item,
-              vendorQuotations: [...item.vendorQuotations, newQuotation],
-            }
+                ...item,
+                vendorQuotations: [...item.vendorQuotations, newQuotation],
+              }
             : item
         )
       );
@@ -527,6 +544,12 @@ const MaterialRequest = () => {
         notes: '',
         quotationFile: null,
       });
+
+      // Clear the file input
+      const fileInput = document.getElementById('quotationFile') as HTMLInputElement;
+      if (fileInput) {
+        fileInput.value = '';
+      }
 
       toast({
         title: 'Vendor Quotation Added',
@@ -720,7 +743,7 @@ const MaterialRequest = () => {
       if (successFullResponse.length > 0 && failedItems.length === 0) {
         toast({
           title: '🎉 Request Submitted Successfully!',
-          description: `All ${successFullResponse.length} item${successFullResponse.length > 1 ? 's have' : ' has'} been submitted for approval. You will be notified once the Company Owner reviews your request.`,
+          description: `All ${successFullResponse.length} item${successFullResponse.length > 1 ? 's have' : ' has'} been submitted for approval. You will be notified once the Management Team reviews your request.`,
           variant: 'default',
         });
       } else if (successFullResponse.length > 0 && failedItems.length > 0) {
@@ -849,18 +872,32 @@ const MaterialRequest = () => {
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        {getFilteredMaterials().map((material) => (
-                          <SelectItem key={material.id} value={material.id.toString()}>
-                            <div className='flex flex-col'>
-                              <div className='font-semibold'>{material.name}</div>
-                              {material.makerBrand && (
-                                <div className='text-xs text-muted-foreground'>
-                                  {material.makerBrand}
-                                </div>
-                              )}
-                            </div>
-                          </SelectItem>
-                        ))}
+                        {/* <div className='p-2 border-b'>
+                          <Input
+                            placeholder='Search materials...'
+                            value={materialSearchTerm}
+                            onChange={(e) => setMaterialSearchTerm(e.target.value)}
+                            className='h-8 text-sm'
+                          />
+                        </div> */}
+                        {getFilteredMaterials().length > 0 ? (
+                          getFilteredMaterials().map((material) => (
+                            <SelectItem key={material.id} value={material.id.toString()}>
+                              <div className='flex flex-col'>
+                                <div className='font-semibold'>{material.name}</div>
+                                {material.makerBrand && (
+                                  <div className='text-xs text-muted-foreground'>
+                                    {material.makerBrand}
+                                  </div>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className='p-2 text-sm text-muted-foreground text-center'>
+                            No materials found
+                          </div>
+                        )}
                       </SelectContent>
                     </Select>
                     {errors[`productName_${item.id}`] && (
@@ -960,6 +997,9 @@ const MaterialRequest = () => {
                         <span className='text-xs text-muted-foreground'>
                           ({item.imagePreviews?.length || 0} images)
                         </span>
+                      </div>
+                      <div className='text-xs text-muted-foreground'>
+                        Supported: JPG, PNG, GIF
                       </div>
                       {item.imagePreviews && item.imagePreviews.length > 0 && (
                         <div className='flex flex-wrap gap-1'>
@@ -1189,18 +1229,32 @@ const MaterialRequest = () => {
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {getFilteredMaterials().map((material) => (
-                        <SelectItem key={material.id} value={material.id.toString()}>
-                          <div className='flex flex-col'>
-                            <div className='font-semibold'>{material.name}</div>
-                            {material.makerBrand && (
-                              <div className='text-xs text-muted-foreground'>
-                                {material.makerBrand}
-                              </div>
-                            )}
-                          </div>
-                        </SelectItem>
-                      ))}
+                      {/* <div className='p-2 border-b'>
+                        <Input
+                          placeholder='Search materials...'
+                          value={materialSearchTerm}
+                          onChange={(e) => setMaterialSearchTerm(e.target.value)}
+                          className='h-8 text-sm'
+                        />
+                      </div> */}
+                      {getFilteredMaterials().length > 0 ? (
+                        getFilteredMaterials().map((material) => (
+                          <SelectItem key={material.id} value={material.id.toString()}>
+                            <div className='flex flex-col'>
+                              <div className='font-semibold'>{material.name}</div>
+                              {material.makerBrand && (
+                                <div className='text-xs text-muted-foreground'>
+                                  {material.makerBrand}
+                                </div>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className='p-2 text-sm text-muted-foreground text-center'>
+                          No materials found
+                        </div>
+                      )}
                     </SelectContent>
                   </Select>
                   {errors[`productName_${item.id}`] && (
@@ -1337,6 +1391,9 @@ const MaterialRequest = () => {
                   {/* Images */}
                 <div className='space-y-2'>
                   <Label className='text-sm font-medium'>Images</Label>
+                  <div className='text-xs text-muted-foreground mb-2'>
+                    Supported formats: JPG, PNG, GIF
+                  </div>
                   <div className='space-y-4'>
                     <Input
                       type='file'
@@ -1837,6 +1894,9 @@ const MaterialRequest = () => {
                     }}
                     className='h-10 px-3 py-2 border border-input bg-background hover:border-primary/50 focus:border-transparent focus:ring-0 outline-none rounded-md text-sm transition-all duration-200'
                   />
+                  <div className='text-xs text-muted-foreground'>
+                    Supported formats: PDF, DOC, DOCX, JPG, JPEG, PNG
+                  </div>
                 </div>
                 <div className='space-y-2'>
                   <Label htmlFor='notes' className='text-sm font-medium'>

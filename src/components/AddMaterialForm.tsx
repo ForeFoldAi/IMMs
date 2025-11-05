@@ -17,7 +17,6 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Plus, X } from 'lucide-react';
-import { useStock } from '@/contexts/StockContext';
 import { materialsApi } from '@/lib/api/materials';
 import { Material, MaterialCategory, Unit } from '@/lib/api/types';
 import { getMaterialCategories, getUnits, createMaterialCategory, createUnit } from '@/lib/api/common';

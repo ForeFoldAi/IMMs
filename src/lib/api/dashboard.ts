@@ -83,6 +83,32 @@ export interface DashboardQueryParams {
   machineId?: number;
 }
 
+export interface VehicleExpenseData {
+  total: number;
+  period?: string;
+  comparison?: string;
+}
+
+export interface VehicleExpenseBreakdown {
+  registrationNumber: string;
+  make: string;
+  amount: number;
+  unitOneAmount?: number;
+  unitTwoAmount?: number;
+}
+
+export interface VehicleExpenseTotalData {
+  total: number;
+  period: string;
+  comparison: string;
+  units: string;
+}
+
+export interface VehicleExpensesResponse {
+  totalExpenses: VehicleExpenseTotalData;
+  vehicleExpenses: VehicleExpenseBreakdown[];
+}
+
 export const dashboardApi = {
   /**
    * Get expenses data with various filters
@@ -210,6 +236,45 @@ export const dashboardApi = {
     const url = `/dashboard/weighted-average-prices${queryString ? `?${queryString}` : ''}`;
 
     const response = await api.get(url);
+    return response.data;
+  },
+
+  /**
+   * Get total vehicle expenses with breakdown
+   * GET /dashboard/vehicle-expenses?dateRangeType=this_month&startDate=2024-01-01&endDate=2024-01-31
+   * Returns: { totalExpenses: { total, period, comparison, units }, vehicleExpenses: [...] }
+   */
+  getVehicleExpenses: async (params: DashboardQueryParams = {}): Promise<VehicleExpensesResponse> => {
+    const queryParams = new URLSearchParams();
+
+    if (params.dateRangeType) queryParams.append('dateRangeType', params.dateRangeType);
+    if (params.startDate) queryParams.append('startDate', params.startDate);
+    if (params.endDate) queryParams.append('endDate', params.endDate);
+    if (params.unitId) queryParams.append('unitId', params.unitId.toString());
+
+    const queryString = queryParams.toString();
+    const url = `/dashboard/vehicle-expenses${queryString ? `?${queryString}` : ''}`;
+
+    const response = await api.get<VehicleExpensesResponse>(url);
+    return response.data;
+  },
+
+  /**
+   * Get vehicle expenses breakdown by individual vehicles (legacy endpoint, kept for backward compatibility)
+   * GET /dashboard/vehicle-expenses/breakdown?dateRangeType=this_month
+   */
+  getVehicleExpensesBreakdown: async (params: DashboardQueryParams = {}): Promise<VehicleExpenseBreakdown[]> => {
+    const queryParams = new URLSearchParams();
+
+    if (params.dateRangeType) queryParams.append('dateRangeType', params.dateRangeType);
+    if (params.startDate) queryParams.append('startDate', params.startDate);
+    if (params.endDate) queryParams.append('endDate', params.endDate);
+    if (params.unitId) queryParams.append('unitId', params.unitId.toString());
+
+    const queryString = queryParams.toString();
+    const url = `/dashboard/vehicle-expenses/breakdown${queryString ? `?${queryString}` : ''}`;
+
+    const response = await api.get<VehicleExpenseBreakdown[]>(url);
     return response.data;
   }
 };

@@ -9,6 +9,7 @@
  * - Optional view mode toggle (list/table)
  * - Optional status filter
  * - Optional items per page selector
+ * - Optional refresh button
  * - Optional export button
  * - Optional add button
  * 
@@ -27,6 +28,8 @@
  *   itemsPerPage={itemsPerPage}
  *   onItemsPerPageChange={setItemsPerPage}
  *   showItemsPerPage={true}
+ *   onRefresh={handleRefresh}
+ *   showRefresh={true}
  *   onExport={exportToCSV}
  *   showExport={true}
  *   onAdd={() => setIsAddOpen(true)}
@@ -40,7 +43,7 @@
  * - Supervisor: Unit filter is hidden, data auto-filtered to their branch
  */
 
-import { Search, Building2, Loader2, Upload, Plus, List, Table } from 'lucide-react';
+import { Search, Building2, Loader2, Upload, Plus, List, Table, RefreshCcw } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import {
@@ -95,6 +98,11 @@ interface UnifiedTabSearchProps {
   showExport?: boolean;
   exportLabel?: string;
 
+  // Refresh (optional)
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
+  showRefresh?: boolean;
+
   // Add/Create Button (optional)
   onAdd?: () => void;
   addLabel?: string;
@@ -129,6 +137,9 @@ export const UnifiedTabSearch: React.FC<UnifiedTabSearchProps> = ({
   isExporting = false,
   showExport = false,
   exportLabel = 'Export',
+  onRefresh,
+  isRefreshing = false,
+  showRefresh = false,
   onAdd,
   addLabel = 'Add New',
   addIcon = <Plus className='w-4 h-4 sm:w-5 sm:h-5 mr-2' />,
@@ -230,27 +241,87 @@ export const UnifiedTabSearch: React.FC<UnifiedTabSearchProps> = ({
               </SelectContent>
             </Select>
 
-            {/* Export Button beside Unit Filter */}
-            {showExport && onExport && (
-              <Button
-                variant='outline'
-                className='text-xs h-8 px-2 whitespace-nowrap'
-                onClick={onExport}
-                disabled={isExporting || !isOnline}
-              >
-                {isExporting ? (
-                  <>
+            {/* Export and Refresh Buttons beside Unit Filter */}
+            <div className='flex gap-1'>
+              {showRefresh && onRefresh && (
+                <Button
+                  variant='outline'
+                  className='text-xs h-8 px-2 whitespace-nowrap'
+                  onClick={onRefresh}
+                  disabled={isRefreshing || !isOnline}
+                >
+                  {isRefreshing ? (
                     <Loader2 className='w-3 h-3 mr-1 animate-spin' />
-                    Export
-                  </>
-                ) : (
-                  <>
-                    <Upload className='w-3 h-3 mr-1' />
-                    Export
-                  </>
-                )}
-              </Button>
-            )}
+                  ) : (
+                    <RefreshCcw className='w-3 h-3 mr-1' />
+                  )}
+                  Refresh
+                </Button>
+              )}
+              {showExport && onExport && (
+                <Button
+                  variant='outline'
+                  className='text-xs h-8 px-2 whitespace-nowrap'
+                  onClick={onExport}
+                  disabled={isExporting || !isOnline}
+                >
+                  {isExporting ? (
+                    <>
+                      <Loader2 className='w-3 h-3 mr-1 animate-spin' />
+                      Export
+                    </>
+                  ) : (
+                    <>
+                      <Upload className='w-3 h-3 mr-1' />
+                      Export
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Row 3.5: Export and Refresh Buttons (when no unit filter) */}
+        {!shouldShowUnitFilter && (showExport || showRefresh) && (
+          <div className='flex items-center gap-2'>
+            <div className='flex gap-1'>
+              {showRefresh && onRefresh && (
+                <Button
+                  variant='outline'
+                  className='text-xs h-8 px-2 whitespace-nowrap'
+                  onClick={onRefresh}
+                  disabled={isRefreshing || !isOnline}
+                >
+                  {isRefreshing ? (
+                    <Loader2 className='w-3 h-3 mr-1 animate-spin' />
+                  ) : (
+                    <RefreshCcw className='w-3 h-3 mr-1' />
+                  )}
+                  Refresh
+                </Button>
+              )}
+              {showExport && onExport && (
+                <Button
+                  variant='outline'
+                  className='text-xs h-8 px-2 whitespace-nowrap'
+                  onClick={onExport}
+                  disabled={isExporting || !isOnline}
+                >
+                  {isExporting ? (
+                    <>
+                      <Loader2 className='w-3 h-3 mr-1 animate-spin' />
+                      Export
+                    </>
+                  ) : (
+                    <>
+                      <Upload className='w-3 h-3 mr-1' />
+                      Export
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -270,8 +341,7 @@ export const UnifiedTabSearch: React.FC<UnifiedTabSearchProps> = ({
       <div className='hidden sm:flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 sm:gap-4'>
       {/* Left side: View Toggle (if enabled) */}
       {showViewToggle && onViewModeChange && viewMode && (
-        <div className='flex flex-col sm:flex-row items-start sm:items-center gap-3'>
-          <div className='flex rounded-lg border border-secondary overflow-hidden bg-secondary/10 w-fit shadow-sm'>
+ <div className='flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-shrink-0'>          <div className='flex rounded-lg border border-secondary overflow-hidden bg-secondary/10 w-fit shadow-sm'>
             <Button
               variant={viewMode === 'list' ? 'default' : 'ghost'}
               size='sm'
@@ -295,10 +365,9 @@ export const UnifiedTabSearch: React.FC<UnifiedTabSearchProps> = ({
       )}
 
       {/* Right side: Search, Filters, and Action Buttons */}
-      <div className='flex flex-col sm:flex-row gap-3 items-start sm:items-center w-full lg:w-auto lg:flex-1 lg:justify-end'>
-        {/* Search Input */}
-        <div className='relative w-full sm:w-64'>
-          <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4' />
+      <div className='flex flex-col sm:flex-row sm:flex-wrap lg:flex-nowrap gap-2 sm:gap-3 items-start sm:items-center w-full lg:w-auto lg:flex-1 lg:justify-end'>        {/* Search Input */}
+      <div className='relative w-full sm:w-64 min-w-[200px] flex-shrink-0'>
+                  <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4' />
           <Input
             placeholder={searchPlaceholder}
             value={searchValue}
@@ -310,8 +379,7 @@ export const UnifiedTabSearch: React.FC<UnifiedTabSearchProps> = ({
         {/* Unit Filter - Only for Company Owner (Supervisors see their own branch only) */}
         {shouldShowUnitFilter && (
           <Select value={filterUnit} onValueChange={onFilterUnitChange}>
-            <SelectTrigger className='w-full sm:w-48 rounded-lg border-secondary focus:border-secondary focus:ring-0 h-10'>
-              <SelectValue
+ <SelectTrigger className='w-full sm:w-48 min-w-[160px] rounded-lg border-secondary focus:border-secondary focus:ring-0 h-10 flex-shrink-0'>              <SelectValue
                 placeholder={isLoadingBranches ? 'Loading...' : 'Select Unit'}
               />
             </SelectTrigger>
@@ -339,8 +407,7 @@ export const UnifiedTabSearch: React.FC<UnifiedTabSearchProps> = ({
         {/* Status Filter (optional) */}
         {showStatusFilter && onStatusFilterChange && statusOptions.length > 0 && (
           <Select value={statusFilter} onValueChange={onStatusFilterChange}>
-            <SelectTrigger className='w-full sm:w-48 rounded-lg border-secondary focus:border-secondary focus:ring-0 h-10'>
-              <SelectValue placeholder='Select Status' />
+<SelectTrigger className='w-full sm:w-40 min-w-[140px] rounded-lg border-secondary focus:border-secondary focus:ring-0 h-10 flex-shrink-0'>              <SelectValue placeholder='Select Status' />
             </SelectTrigger>
             <SelectContent>
               {statusOptions.map((option) => (
@@ -377,11 +444,30 @@ export const UnifiedTabSearch: React.FC<UnifiedTabSearchProps> = ({
           </div>
         )}
 
+        {/* Refresh Button (optional) */}
+        {showRefresh && onRefresh && (
+          <Button
+            variant='outline'
+            className='w-full sm:w-auto text-sm sm:text-base h-10 flex-shrink-0 whitespace-nowrap'
+
+            onClick={onRefresh}
+            disabled={isRefreshing || !isOnline}
+          >
+            {isRefreshing ? (
+              <Loader2 className='w-4 h-4 sm:w-5 sm:h-5 mr-2 animate-spin' />
+            ) : (
+              <RefreshCcw className='w-4 h-4 sm:w-5 sm:h-5 mr-2' />
+            )}
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
+        )}
+
         {/* Export Button (optional) */}
         {showExport && onExport && (
           <Button
             variant='outline'
-            className='w-full sm:w-auto text-sm sm:text-base h-10'
+            className='w-full sm:w-auto text-sm sm:text-base h-10 flex-shrink-0 whitespace-nowrap'
+
             onClick={onExport}
             disabled={isExporting || !isOnline}
           >
@@ -397,11 +483,13 @@ export const UnifiedTabSearch: React.FC<UnifiedTabSearchProps> = ({
         {/* Add/Create Button (optional) */}
         {showAddButton && onAdd && (
           <Button
-            className='btn-primary w-full sm:w-auto text-sm sm:text-base h-10'
-            onClick={onAdd}
+          className='btn-primary w-full sm:w-auto text-sm sm:text-base h-10 flex-shrink-0 whitespace-nowrap px-3 sm:px-4'
+
+          onClick={onAdd}
           >
-            {addIcon}
-            {addLabel}
+            <Plus className='w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2 flex-shrink-0' />
+            <span className='hidden lg:inline'>{addLabel}</span>
+            <span className='lg:hidden'>Add</span>
           </Button>
         )}
         </div>

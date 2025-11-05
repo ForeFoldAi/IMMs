@@ -32,7 +32,7 @@ interface RequestStatusManagerProps {
     requestId: string,
     newStatus: string,
     updateData: any
-  ) => void;
+  ) => Promise<void>;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -81,26 +81,15 @@ export const RequestStatusManager = ({
     if (!canApprove) return;
 
     try {
-      // Extract numeric ID from the request - handle both string and number IDs
-      const requestId = typeof request.id === 'string' ? parseInt(request.id) : request.id;
-      
-      if (!requestId || isNaN(requestId)) {
-        throw new Error('Invalid request ID');
-      }
-
-      // Call the update API endpoint to change status to approved
-      const updatedRequest = await materialIndentsApi.update(requestId, {
-        status: 'approved',
-        additionalNotes: `Approved by Owner: ${currentUser.name} on ${new Date().toISOString()}`,
-      });
-
-      // Update local state through the parent component
-      onStatusUpdate(request.id, 'approved', {
+      // Update local state through the parent component and wait for it to complete
+      // This will handle the API call and data refresh
+      await onStatusUpdate(request.id, 'approved', {
         approvedBy: currentUser.name,
         approvedDate: new Date().toISOString(),
         statusDescription: 'Approved by Owner - Ready for ordering',
         currentStage: 'Approved',
         progressStage: 2,
+        additionalNotes: `Approved by Owner: ${currentUser.name} on ${new Date().toISOString()}`,
       });
 
       toast({
@@ -108,6 +97,7 @@ export const RequestStatusManager = ({
         description: `Request ${request.id} has been approved. Supervisor can now update to Ordered status.`,
       });
 
+      // Close the dialog after the update is complete
       onClose();
     } catch (error) {
       console.error('Error approving request:', error);
@@ -139,18 +129,9 @@ export const RequestStatusManager = ({
 
     setIsReverting(true);
     try {
-      // Extract numeric ID from the request - handle both string and number IDs
-      const requestId = typeof request.id === 'string' ? parseInt(request.id) : request.id;
-      
-      if (!requestId || isNaN(requestId)) {
-        throw new Error('Invalid request ID');
-      }
-
-      // Call the revert API endpoint
-      const updatedRequest = await materialIndentsApi.revert(requestId, revertReason);
-
-      // Update local state through the parent component
-      onStatusUpdate(request.id, 'reverted', {
+      // Update local state through the parent component and wait for it to complete
+      // This will handle the API call and data refresh
+      await onStatusUpdate(request.id, 'reverted', {
         revertedBy: currentUser.name,
         revertedDate: new Date().toISOString(),
         revertReason: revertReason,
@@ -166,6 +147,8 @@ export const RequestStatusManager = ({
       });
 
       setRevertReason('');
+      
+      // Close the dialog after the update is complete
       onClose();
     } catch (error) {
       console.error('Error reverting request:', error);

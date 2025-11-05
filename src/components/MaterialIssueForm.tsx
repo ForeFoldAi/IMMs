@@ -92,6 +92,7 @@ export const MaterialIssueForm = ({
 }: MaterialIssueFormProps) => {
   const { currentUser } = useRole();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingEditData, setIsLoadingEditData] = useState(false);
 
   // Helper function to format date as dd-mm-yyyy
   const formatDate = (dateString: string): string => {
@@ -135,7 +136,11 @@ export const MaterialIssueForm = ({
   // Effect to populate form when editing
   useEffect(() => {
     if (editingIssue && isOpen) {
-      LoadEditData();
+      // Add a small delay to ensure dialog is fully rendered
+      const timer = setTimeout(() => {
+        LoadEditData();
+      }, 100);
+      return () => clearTimeout(timer);
     } else if (!editingIssue && isOpen) {
       // Reset form for new issue
       setFormData({
@@ -168,68 +173,93 @@ export const MaterialIssueForm = ({
   }, [editingIssue, isOpen, currentUser]);
 
   const LoadEditData = async () => {
-    const issuedDate = String(editingIssue.issuedDate || '');
+    if (!editingIssue) return;
+    
+    setIsLoadingEditData(true);
+    
+    try {
+      const issuedDate = String(editingIssue.issuedDate || '');
+      const items = editingIssue.allItems as MaterialIssueItem[];
+      const formattedItems: MaterialItemFormData[] = [];
 
-    const items = editingIssue.allItems as MaterialIssueItem[];
-    const formattedItems: MaterialItemFormData[] = [];
-
-    for await (const item of items) {
-      formattedItems.push({
-        id: `edit-item-${item.id}-${Date.now()}`, // Generate unique ID for editing
-        srNo: item.id,
-        materialId: Number(
-          item.material
-            ? (item.material as unknown as Record<string, unknown>).id
-            : 0
-        ),
-        nameOfMaterial: String(
-          item.material
-            ? (item.material as unknown as Record<string, unknown>).name
-            : ''
-        ),
-        makerBrand: String(
-          item.material
-            ? (item.material as unknown as Record<string, unknown>)
-                .makerBrand || ''
-            : ''
-        ),
-        specifications: String(
-          item.material
-            ? (item.material as unknown as Record<string, unknown>)
-                .specifications || ''
-            : ''
-        ),
-        existingStock: Number(item.stockBeforeIssue || 0),
-        issuedQty: String(item.issuedQuantity || 0),
-        stockAfterIssue: Number(item.stockAfterIssue || 0),
-        measureUnit: String(
-          item.material
-            ? (
-                (item.material as unknown as Record<string, unknown>)
-                  .measureUnit as Record<string, unknown>
-              )?.name || 'units'
-            : 'units'
-        ),
-        receiverName: String(item.receiverName || ''),
-        image: null as File | null,
-        imagePreview: await materialIssuesApi
-          .getItemImage(
+      // Process items sequentially to avoid race conditions
+      for (const item of items) {
+        let imagePreview = '';
+        
+        try {
+          // Get image preview with error handling
+          const imageResponse = await materialIssuesApi.getItemImage(
             Number(editingIssue.originalIssue['id']),
             Number(item.id)
-          )
-          ?.then((image) => image?.url),
-        purpose: String(item.purpose || ''),
-        machineId: Number(item.machineId || 0),
-        machineName: String(item.machineName || ''),
-        purposeType: (item.purposeType as PurposeType) || PurposeType.MACHINE,
-        notes: String(item.notes || ''),
-      } as unknown as MaterialItemFormData);
+          );
+          imagePreview = imageResponse?.url || '';
+        } catch (imageError) {
+          console.warn('Failed to load image for item:', item.id, imageError);
+          imagePreview = '';
+        }
+
+        formattedItems.push({
+          id: `edit-item-${item.id}-${Date.now()}`, // Generate unique ID for editing
+          srNo: item.id,
+          materialId: Number(
+            item.material
+              ? (item.material as unknown as Record<string, unknown>).id
+              : 0
+          ),
+          nameOfMaterial: String(
+            item.material
+              ? (item.material as unknown as Record<string, unknown>).name
+              : ''
+          ),
+          makerBrand: String(
+            item.material
+              ? (item.material as unknown as Record<string, unknown>)
+                  .makerBrand || ''
+              : ''
+          ),
+          specifications: String(
+            item.material
+              ? (item.material as unknown as Record<string, unknown>)
+                  .specifications || ''
+              : ''
+          ),
+          existingStock: Number(item.stockBeforeIssue || 0),
+          issuedQty: String(item.issuedQuantity || 0),
+          stockAfterIssue: Number(item.stockAfterIssue || 0),
+          measureUnit: String(
+            item.material
+              ? (
+                  (item.material as unknown as Record<string, unknown>)
+                    .measureUnit as Record<string, unknown>
+                )?.name || 'units'
+              : 'units'
+          ),
+          receiverName: String(item.receiverName || ''),
+          image: null as File | null,
+          imagePreview: imagePreview,
+          purpose: String(item.purpose || ''),
+          machineId: Number(item.machineId || 0),
+          machineName: String(item.machineName || ''),
+          purposeType: (item.purposeType as PurposeType) || PurposeType.MACHINE,
+          notes: String(item.notes || ''),
+        } as unknown as MaterialItemFormData);
+      }
+      
+      setFormData({
+        date: issuedDate,
+        items: formattedItems,
+        additionalNotes: String(editingIssue.additionalNotes || ''),
+      });
+    } catch (error) {
+      console.error('Error loading edit data:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load material issue details. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingEditData(false);
     }
-    setFormData({
-      date: issuedDate,
-      items: formattedItems,
-      additionalNotes: String(editingIssue.additionalNotes || ''),
-    });
   };
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -664,7 +694,7 @@ export const MaterialIssueForm = ({
             <div>
               <div className='text-lg font-bold'>
                 {editingIssue
-                  ? 'VIEW ISSUED MATERIAL DETAILS'
+                  ? 'ISSUED MATERIAL DETAILS'
                   : 'MATERIAL ISSUE FORM'}
               </div>
             </div>
@@ -672,6 +702,18 @@ export const MaterialIssueForm = ({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className='space-y-3'>
+          {/* Loading indicator for edit data */}
+          {editingIssue && isLoadingEditData && (
+            <div className='flex items-center justify-center py-8'>
+              <div className='flex items-center gap-2'>
+                <Loader2 className='h-4 w-4 animate-spin' />
+                <span className='text-sm text-muted-foreground'>
+                  Loading material issue details...
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Add Item Button - Only show when not editing */}
           {!editingIssue && (
             <div className='flex justify-end'>
@@ -721,6 +763,7 @@ export const MaterialIssueForm = ({
           )}
 
           {/* Material Items Table - Compact */}
+          {!(editingIssue && isLoadingEditData) && (
           <Card>
             <CardContent className='p-0'>
               <div className='overflow-x-auto'>
@@ -1219,8 +1262,10 @@ export const MaterialIssueForm = ({
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* Additional Information - Compact */}
+          {!(editingIssue && isLoadingEditData) && (
           <Card>
             <CardContent className='space-y-3'>
               <div className='space-y-1'>
@@ -1257,7 +1302,21 @@ export const MaterialIssueForm = ({
                 <div className='space-y-1'>
                   <Label className='text-xs'>Issued By</Label>
                   <div className='input-friendly bg-secondary text-center py-2 font-semibold text-xs text-black'>
-                    {currentUser?.name || 'Current User'}
+                    {editingIssue 
+                      ? (() => {
+                          // When viewing issued material details, show the actual issuer
+                          const originalIssue = editingIssue.originalIssue as MaterialIssue;
+                          const issuedByUser = originalIssue?.issuedBy;
+                          
+                          if (issuedByUser) {
+                            // Show only the name without role/designation
+                            return issuedByUser.name;
+                          }
+                          
+                          return 'Unknown User';
+                        })()
+                      : (currentUser?.name || 'Current User')
+                    }
                   </div>
                 </div>
 
@@ -1270,8 +1329,10 @@ export const MaterialIssueForm = ({
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* Form Actions - Compact */}
+          {!(editingIssue && isLoadingEditData) && (
           <div className='flex justify-center gap-3 pt-3'>
             {!editingIssue && (
               <Button
@@ -1305,6 +1366,7 @@ export const MaterialIssueForm = ({
               {editingIssue ? 'Close' : 'Cancel'}
             </Button>
           </div>
+          )}
         </form>
       </DialogContent>
     </Dialog>

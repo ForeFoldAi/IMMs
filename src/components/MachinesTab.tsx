@@ -44,11 +44,11 @@ import {
 import { AddMachineForm } from './AddMachineForm';
 import { UnifiedTabSearch } from './UnifiedTabSearch';
 import { useRole } from '../contexts/RoleContext';
-import type { Machine, PaginatedResponse } from '../lib/api/types.d';
-import { MachineStatus } from '../lib/api/types.d';
+import type { Machine, PaginatedResponse } from '../lib/api/types';
+import { MachineStatus } from '../lib/api/types';
 import { machinesApi } from '../lib/api/machines';
 import { branchesApi } from '../lib/api/branches';
-import type { Branch } from '../lib/api/types.d';
+import type { Branch } from '../lib/api/types.d.ts';
 import { Alert, AlertDescription } from './ui/alert';
 import { toast } from '../hooks/use-toast';
 
@@ -86,6 +86,7 @@ export const MachinesTab = () => {
   const [isLoadingBranches, setIsLoadingBranches] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isExporting, setIsExporting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Sorting state
   const [sortField, setSortField] = useState<SortField>('createdAt');
@@ -466,6 +467,18 @@ export const MachinesTab = () => {
       setMachines([]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Handle refresh
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await fetchMachines();
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -859,6 +872,9 @@ export const MachinesTab = () => {
         onExport={handleExportToCSV}
         isExporting={isExporting}
         showExport={true}
+        onRefresh={handleRefresh}
+        isRefreshing={isRefreshing}
+        showRefresh={true}
         onAdd={() => setIsAddMachineOpen(true)}
         addLabel='Add New Machine'
         showAddButton={true}
@@ -906,11 +922,11 @@ export const MachinesTab = () => {
                     <div className='flex flex-col sm:flex-row sm:items-center gap-2 mb-2'>
                       <button
                         onClick={() => handleMachineClick(machine)}
-                        className='font-semibold text-foreground text-sm sm:text-base text-left hover:text-primary hover:underline cursor-pointer transition-colors duration-200'
+                        className='font-semibold text-black text-sm sm:text-base text-left hover:text-primary hover:underline cursor-pointer transition-colors duration-200'
                       >
                         {machine.name}
                       </button>
-                      <span className='text-primary font-semibold text-xs sm:text-sm'>
+                      <span className='text-black font-semibold text-xs sm:text-sm'>
                         {machine.type}
                       </span>
                       <span
@@ -922,12 +938,12 @@ export const MachinesTab = () => {
                     <div className='space-y-1 mb-2'>
                       <Badge
                         variant='outline'
-                        className='text-xs bg-primary/10 text-primary border-primary/30'
+                        className='text-xs bg-primary/10 text-black border-primary/30'
                       >
                         {machine.branchName}
                       </Badge>
                       {machine.branchLocation && (
-                        <div className='flex items-center gap-2 text-xs text-muted-foreground'>
+                        <div className='flex items-center gap-2 text-xs text-black'>
                           <MapPin className='w-3 h-3 flex-shrink-0' />
                           <span className='truncate'>
                             {machine.branchLocation}
@@ -1045,24 +1061,24 @@ export const MachinesTab = () => {
                       <TableCell className='font-semibold text-foreground'>
                         <button
                           onClick={() => handleMachineClick(machine)}
-                          className='text-primary hover:text-primary/80 hover:underline font-semibold cursor-pointer transition-colors duration-200'
+                          className='text-black hover:text-primary/80 hover:underline font-semibold cursor-pointer transition-colors duration-200'
                         >
                           {machine.name}
                         </button>
                       </TableCell>
-                      <TableCell className='text-primary font-semibold'>
+                      <TableCell className='text-black font-semibold'>
                         {machine.type}
                       </TableCell>
                       <TableCell className='text-sm'>
                         <div className='space-y-1'>
                           <Badge
                             variant='outline'
-                            className='text-xs bg-primary/10 text-primary border-primary/30'
+                            className='text-xs bg-primary/10 text-black border-primary/30'
                           >
                             {machine.branchName}
                           </Badge>
                           {machine.branchLocation && (
-                            <div className='text-xs text-muted-foreground'>
+                            <div className='text-xs text-black'>
                               {machine.branchLocation}
                             </div>
                           )}

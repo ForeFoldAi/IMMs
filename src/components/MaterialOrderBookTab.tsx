@@ -133,6 +133,9 @@ export const MaterialOrderBookTab = () => {
   // Export functionality state
   const [isExporting, setIsExporting] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  
+  // Refresh functionality state
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [exportDateRange, setExportDateRange] = useState({
     from: '',
     to: '',
@@ -404,6 +407,18 @@ export const MaterialOrderBookTab = () => {
       // Set new column and default to DESC for Purchase ID (newest first)
       setSortBy(column);
       setSortOrder(column === 'uniqueId' ? 'DESC' : 'ASC');
+    }
+  };
+
+  // Handle refresh
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await fetchMaterialIndents(pagination.page, pagination.limit);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -770,14 +785,20 @@ export const MaterialOrderBookTab = () => {
     updateData?: any
   ) => {
     try {
-      // Find the request to get the numeric ID
-      const request = allRequests.find((req) => req.id === requestId);
+      // Find the request in materialIndents (API data) or allRequests (legacy)
+      let request: MaterialIndent | LegacyRequest | undefined = materialIndents.find((indent) => indent.id.toString() === requestId.toString());
+      
+      if (!request) {
+        // Fallback to allRequests for legacy compatibility
+        request = allRequests.find((req) => req.id === requestId);
+      }
+      
       if (!request) {
         throw new Error('Request not found');
       }
 
-      // Use the numeric ID for API calls
-      const numericId = request.originalId || parseInt(requestId);
+      // Use the numeric ID for API calls - handle both MaterialIndent and LegacyRequest
+      const numericId = (request as MaterialIndent).id || (request as LegacyRequest).originalId || parseInt(requestId);
       if (isNaN(numericId)) {
         throw new Error('Invalid request ID');
       }
@@ -793,6 +814,9 @@ export const MaterialOrderBookTab = () => {
         if (updateData?.approvedBy) {
           updatePayload.approvedBy = updateData.approvedBy;
           updatePayload.approvedDate = updateData.approvedDate;
+        }
+        if (updateData?.additionalNotes) {
+          updatePayload.additionalNotes = updateData.additionalNotes;
         }
         await materialIndentsApi.update(numericId, updatePayload);
       } else {
@@ -830,7 +854,7 @@ export const MaterialOrderBookTab = () => {
         await materialIndentsApi.update(numericId, updatePayload);
       }
 
-      // Refresh the data from API
+      // Refresh the data from API to ensure we have the latest state
       await fetchMaterialIndents(pagination.page, pagination.limit);
 
       toast({
@@ -878,40 +902,186 @@ export const MaterialOrderBookTab = () => {
         throw new Error('No request selected for resubmission');
       }
 
-      // Transform the form data back to API format
-      const apiData = transformFormDataToApiFormat(requestData);
+      // Process items and submit each with multipart form data
+      const failedItems: string[] = [];
+      let successCount = 0;
 
-      console.log('Calling reSubmit API with transformed data:', apiData);
-      console.log(
-        'Resubmitting indent ID:',
-        selectedRequestForResubmit.id
-      );
+      // Submit each item individually with its files
+      for (let i = 0; i < requestData.items.length; i++) {
+        const item = requestData.items[i];
+        
+        console.log('Processing item for resubmit:', item);
+        console.log('Item images:', item.images);
+        console.log('Item vendorQuotations:', item.vendorQuotations);
+        console.log('Item vendorQuotations length:', item.vendorQuotations?.length);
+        console.log('All vendor quotations with details:', item.vendorQuotations);
+        console.log('Vendor quotations with isSelected flag:', item.vendorQuotations?.map(v => ({ 
+          vendorName: v.vendorName, 
+          isSelected: v.isSelected,
+          hasFile: !!v.quotationFile
+        })));
+        
+        // Find the material and machine
+        const material = availableMaterials.find(
+          (m) => m.name === item.productName
+        );
+        
+        if (!material) {
+          failedItems.push(`${item.productName}: Material not found`);
+          continue;
+        }
 
-      // Use the reSubmit API method with proper data structure
+        const machine = availableMachinesData.find(
+          (m) => m.name === item.machineName
+        );
+
+        // Build the item payload similar to MaterialRequest - WITHOUT any IDs
+        // Note: We don't pass item ID, quotation IDs, or any IDs to let backend create new records
+        const itemPayload = {
+          // DON'T include item ID - let backend create new item record
+          materialId: material.id,
+          specifications: item.specifications || '',
+          requestedQuantity: Number(item.reqQuantity) || 0,
+          purposeType: (item as any).purposeType || 'machine',
+          machineId: (item as any).purposeType === 'machine' ? machine?.id : undefined,
+          machineName: (item as any).purposeType !== 'machine' ? item.machineName : undefined,
+          itemImageCount: (item.images as File[])?.length || 0,
+          notes: item.notes || '',
+          vendorQuotations: (() => {
+            const quotations = item.vendorQuotations || [];
+            const selectedQuotations = quotations.filter((v: any) => v.isSelected === true);
+            
+            console.log('Total quotations available:', quotations.length);
+            console.log('Selected quotations count:', selectedQuotations.length);
+            
+            // If there are selected quotations, use only those; otherwise include all quotations
+            const quotationsToSend = selectedQuotations.length > 0 ? selectedQuotations : quotations;
+            
+            console.log('Quotations to send (count):', quotationsToSend.length);
+            
+            return quotationsToSend.map((v: any) => {
+              // DON'T include quotation ID - let backend create new quotation record
+              console.log('Processing quotation:', v.vendorName, 'hasFile:', !!v.quotationFile);
+              return {
+                // No ID field - backend will create new quotation
+                vendorName: v.vendorName,
+                contactPerson: v.contactPerson || '',
+                phone: v.phone || '',
+                price: Number(v.price) || 0,
+                imageCount: v.quotationFile ? 1 : 0,
+                quotationAmount: Number((v.quotationAmount || v.quotedPrice || '0').toString().replace(/[₹,]/g, '')) || 0,
+                notes: v.notes || '',
+              };
+            });
+          })(),
+        };
+        
+        console.log('Item payload (WITHOUT any IDs - ready for backend to create new records):', itemPayload);
+
+        // Create FormData for this item
+        const form = new FormData();
+        
+        // Add additional notes if available
+        const additionalNotes = `Resubmitted after addressing revert reason: ${
+          selectedRequestForResubmit.rejectionReason || 'N/A'
+        }. Changes made: ${(requestData as any).resubmissionNotes || 'N/A'}`;
+        
+        form.append('additionalNotes', additionalNotes);
+        form.append('items', JSON.stringify([itemPayload]));
+        form.append('status', IndentStatus.PENDING_APPROVAL);
+
+        // Append item files if any
+        if (item.images && Array.isArray(item.images)) {
+          console.log('Appending item files:', item.images.length, 'files');
+          (item.images as File[]).forEach((file, index) => {
+            if (file instanceof File) {
+              console.log(`Appending item file ${index + 1}:`, file.name, file.type, file.size);
+              form.append('itemFiles', file);
+            } else {
+              console.warn('File at index', index, 'is not a File instance:', file);
+            }
+          });
+        } else {
+          console.log('No item images to append');
+        }
+
+        // Append vendor quotation files if any
+        if (item.vendorQuotations && Array.isArray(item.vendorQuotations)) {
+          console.log('Appending vendor quotation files');
+          item.vendorQuotations.forEach((quotation: any, index) => {
+            if (quotation.quotationFile && quotation.quotationFile instanceof File) {
+              console.log(`Appending quotation file ${index + 1}:`, quotation.quotationFile.name);
+              form.append('quotationFiles', quotation.quotationFile);
+            }
+          });
+        }
+
+        // Submit via API
+        try {
       const response = await materialIndentsApi.reSubmit(
         selectedRequestForResubmit.id,
-        {
-          status: IndentStatus.PENDING_APPROVAL,
-          additionalNotes: apiData.additionalNotes,
-          items: apiData.items
-        }
-      );
-      console.log('API response:', response);
+            form
+          );
+          
+          console.log('Item resubmitted successfully:', response);
+          successCount++;
+          
+          toast({
+            title: 'Success',
+            description: `${item.productName} resubmitted successfully.`,
+            variant: 'default',
+          });
+        } catch (itemError) {
+          console.error('Failed to resubmit item:', itemError);
+          
+          const axiosError = itemError as {
+            response?: { 
+              data?: { message?: string; error?: string };
+              status?: number;
+            };
+          };
 
-      // Close the dialog
-      setIsResubmitFormOpen(false);
-      setSelectedRequestForResubmit(null);
-      setResubmitFormData(null);
-      setLoadingResubmitId(null);
+          const errorMessage = 
+            axiosError.response?.data?.message ||
+            axiosError.response?.data?.error ||
+            `Failed to resubmit ${item.productName}`;
+
+          failedItems.push(`${item.productName}: ${errorMessage}`);
+
+          toast({
+            title: 'Error',
+            description: `Failed to resubmit ${item.productName}`,
+            variant: 'destructive',
+          });
+        }
+      }
+
+      // Show final summary
       setIsSubmittingResubmit(false);
 
+      if (failedItems.length === 0) {
       toast({
         title: 'Success',
         description: 'Request resubmitted successfully.',
       });
 
+        // Close the dialog
+        setIsResubmitFormOpen(false);
+        setSelectedRequestForResubmit(null);
+        setResubmitFormData(null);
+        setLoadingResubmitId(null);
+
       // Refresh the data from API
       await fetchMaterialIndents(pagination.page, pagination.limit);
+      } else {
+        // Show detailed errors
+        toast({
+          title: 'Partial Failure',
+          description: `Some items failed to resubmit. Check console for details.`,
+          variant: 'destructive',
+        });
+      }
+
     } catch (error) {
       console.error('Failed to resubmit request:', error);
 
@@ -952,107 +1122,6 @@ export const MaterialOrderBookTab = () => {
       setLoadingResubmitId(null);
       setIsSubmittingResubmit(false);
     }
-  };
-
-  // Transform form data back to API format
-  const transformFormDataToApiFormat = (formData: any) => {
-    console.log('Transforming form data to API format:', formData);
-
-    const newData = {
-      additionalNotes: `Resubmitted after addressing revert reason: ${
-        selectedRequestForResubmit?.rejectionReason || 'N/A'
-      }. Changes made: ${formData.resubmissionNotes || 'N/A'}`,
-      items: formData.items.map((item: any) => {
-        const material = availableMaterials.find(
-          (m) => m.name === item.productName
-        );
-        if (!material) {
-          console.error('Material not found for:', item.productName);
-          throw new Error(
-            `Material "${item.productName}" not found in available materials`
-          );
-        }
-
-        // Map purpose type to enum values
-        let purposeType = 'machine';
-        if (item.purposeType === 'spare') {
-          purposeType = 'spare';
-        } else if (item.purposeType === 'other') {
-          purposeType = 'other';
-        }
-
-        const itemData: any = {
-          // Don't pass item id - let backend create new item records
-          materialId: material.id,
-          specifications: item.specifications || '',
-          requestedQuantity: Number(item.reqQuantity) || 0,
-          purposeType: purposeType,
-          notes: item.notes || '',
-          currentStock: item.oldStock || 0,
-        };
-
-        // Handle machine ID properly
-        if (item.purposeType === 'machine' && item.machineName) {
-          // Find the machine ID from the available machines data
-          const machine = availableMachinesData.find(
-            (m) => m.name === item.machineName
-          );
-
-          if (machine) {
-            itemData.machineId = machine.id;
-            console.log(
-              `Found machine ID ${machine.id} for machine: ${item.machineName}`
-            );
-          } else {
-            console.warn(
-              'Machine not found in available machines:',
-              item.machineName
-            );
-            // Don't include machineId if not found
-          }
-        } else if (item.purposeType !== 'machine') {
-          itemData.machineName = item.machineName || item.purposeType;
-        }
-
-        // Handle vendor quotations - use vendorQuotations field and remove IDs
-        if (item.vendorQuotations && item.vendorQuotations.length > 0) {
-          itemData.vendorQuotations = item.vendorQuotations.map(
-            (quotation: any) => ({
-              // Don't pass id - let backend create new quotation records
-              vendorName: quotation.vendorName,
-              contactPerson: quotation.contactPerson || '',
-              phone: quotation.phone || '',
-              price: Number(quotation.price) || 0,
-              // Prefer quotationAmount (raw value), fallback to quotedPrice (strip currency)
-              quotationAmount: Number(
-                (quotation.quotationAmount || quotation.quotedPrice || '0')
-                  .toString()
-                  .replace(/[₹,]/g, '')
-              ) || 0,
-              notes: quotation.notes || '',
-              isSelected: quotation.isSelected || false,
-              filePaths: quotation.filePaths || [],
-            })
-          );
-        }
-
-        return itemData;
-      }),
-    };
-
-    // Remove IDs from vendorQuotations as requested
-    const newDataWithOutIds = {
-      ...newData,
-      items: newData.items?.map((eachItem) => ({
-        ...eachItem,
-        vendorQuotations: eachItem.vendorQuotations?.map(
-          ({ id, ...rest }) => rest
-        ),
-      })),
-    };
-
-    console.log('Transformed API data:', newDataWithOutIds);
-    return newDataWithOutIds;
   };
 
   // Handle item changes in the form
@@ -1138,15 +1207,15 @@ export const MaterialOrderBookTab = () => {
         'Maker/Brand',
         'Quantity',
         'Unit Price (₹)',
-        'Total Quotation Amount (₹)',
+        'Total Amount (₹)',
         'Status',
+        'Approved By',
         'Requested By',
         'Unit',
         'Branch',
         'Machine Name',
         'Purpose',
         'Received Date',
-        'Approved By',
         'Approved Date',
         'Additional Notes',
         'Rejection Reason'
@@ -1196,13 +1265,15 @@ export const MaterialOrderBookTab = () => {
             shouldShowPrice && approvedQuotation ? `"₹${approvedQuotation.price}"` : '""',
             shouldShowPrice && approvedQuotation ? `"₹${approvedQuotation.quotationAmount}"` : '""',
             `"${getStatusLabel(indent.status)}"`,
+            `"${['approved', 'ordered', 'partially_received', 'fully_received', 'reverted'].includes(indent.status) 
+                ? (indent.approvedBy?.name || '') 
+                : ''}"`,
             `"${indent.requestedBy?.name || 'Unknown'}"`,
             `"${indent.branch?.name || 'Unknown'}"`,
             `"${indent.branch?.location || ''}"`,
             `"${getMachineName()}"`,
             `"${item.notes || indent.additionalNotes || ''}"`,
             `"${transformedIndent?.receivedDate || ''}"`,
-            `"${indent.approvedBy?.name || ''}"`,
             `"${indent.approvalDate ? formatDateToDDMMYYYY(indent.approvalDate) : ''}"`,
             `"${indent.additionalNotes || ''}"`,
             `"${indent.rejectionReason || ''}"`
@@ -1726,6 +1797,10 @@ export const MaterialOrderBookTab = () => {
           aValue = a.status?.toLowerCase() || '';
           bValue = b.status?.toLowerCase() || '';
           break;
+        case 'approvedBy':
+          aValue = a.approvedBy?.toLowerCase() || '';
+          bValue = b.approvedBy?.toLowerCase() || '';
+          break;
         case 'receivedDate':
           aValue = a.receivedDate || '';
           bValue = b.receivedDate || '';
@@ -1961,7 +2036,7 @@ export const MaterialOrderBookTab = () => {
                   onClick={() => handleSort('value')}
                 >
                   <div className='flex items-center gap-2'>
-                    Total Quotation Amount
+                    Total Amount
                     {getSortIcon('value')}
                   </div>
                 </TableHead>
@@ -1972,6 +2047,15 @@ export const MaterialOrderBookTab = () => {
                   <div className='flex items-center gap-2'>
                     Status
                     {getSortIcon('status')}
+                  </div>
+                </TableHead>
+                <TableHead
+                  className='min-w-[120px] text-foreground font-semibold cursor-pointer hover:bg-secondary/30'
+                  onClick={() => handleSort('approvedBy')}
+                >
+                  <div className='flex items-center gap-2'>
+                    Approved By
+                    {getSortIcon('approvedBy')}
                   </div>
                 </TableHead>
                 <TableHead
@@ -2031,7 +2115,7 @@ export const MaterialOrderBookTab = () => {
                           request.status === 'reverted' &&
                           hasPermission('inventory:material-indents:update')
                             ? 'text-orange-600 hover:text-orange-700'
-                            : 'text-primary'
+                            : 'text-black'
                         }`}
                         onClick={() =>
                           handleRequestClick(
@@ -2088,6 +2172,11 @@ export const MaterialOrderBookTab = () => {
                       </Badge>
                     </TableCell>
                     <TableCell className='text-sm'>
+                      {['approved', 'ordered', 'partially_received', 'fully_received', 'reverted'].includes(request.status) 
+                        ? (request.approvedBy || '-') 
+                        : '-'}
+                    </TableCell>
+                    <TableCell className='text-sm'>
                       {request.receivedDate || '-'}
                     </TableCell>
                     <TableCell className='text-sm'>
@@ -2097,7 +2186,7 @@ export const MaterialOrderBookTab = () => {
                       <div className='space-y-1'>
                         <Badge
                           variant='outline'
-                          className='text-xs bg-primary/10 text-primary border-primary/30'
+                          className='text-xs bg-primary/10 text-black border-primary/30'
                         >
                           {request.unitName}
                         </Badge>
@@ -2176,7 +2265,7 @@ export const MaterialOrderBookTab = () => {
                   onClick={() => handleSort('value')}
                 >
                   <div className='flex items-center gap-2'>
-                    Total Quotation Amount
+                    Total  Amount
                     {getSortIcon('value')}
                   </div>
                 </TableHead>
@@ -2187,6 +2276,15 @@ export const MaterialOrderBookTab = () => {
                   <div className='flex items-center gap-2'>
                     Status
                     {getSortIcon('status')}
+                  </div>
+                </TableHead>
+                <TableHead
+                  className='min-w-[120px] text-foreground font-semibold cursor-pointer hover:bg-secondary/30'
+                  onClick={() => handleSort('approvedBy')}
+                >
+                  <div className='flex items-center gap-2'>
+                    Approved By
+                    {getSortIcon('approvedBy')}
                   </div>
                 </TableHead>
                 <TableHead
@@ -2232,7 +2330,7 @@ export const MaterialOrderBookTab = () => {
                           request.status === 'reverted' &&
                           hasPermission('inventory:material-indents:update')
                             ? 'text-orange-600 hover:text-orange-700'
-                            : 'text-primary'
+                            : 'text-black'
                         }`}
                         onClick={() =>
                           handleRequestClick(
@@ -2285,6 +2383,11 @@ export const MaterialOrderBookTab = () => {
                       </Badge>
                     </TableCell>
                     <TableCell className='text-sm'>
+                      {['approved', 'ordered', 'partially_received', 'fully_received', 'reverted'].includes(request.status) 
+                        ? (request.approvedBy || '-') 
+                        : '-'}
+                    </TableCell>
+                    <TableCell className='text-sm'>
                       {request.receivedDate || '-'}
                     </TableCell>
                     <TableCell className='text-sm'>
@@ -2294,7 +2397,7 @@ export const MaterialOrderBookTab = () => {
                       <div className='space-y-1'>
                         <Badge
                           variant='outline'
-                          className='text-xs bg-primary/10 text-primary border-primary/30'
+                          className='text-xs bg-primary/10 text-black border-primary/30'
                         >
                           {request.unitName}
                         </Badge>
@@ -2493,65 +2596,49 @@ export const MaterialOrderBookTab = () => {
           <Button
             variant='outline'
             className='gap-2 rounded-lg text-orange-600 border-orange-600 hover:bg-orange-50'
-            onClick={() => {
-              // In a real implementation, you'd fetch the purchase order
-              // For now, we'll create a mock purchase object
-              setSelectedPurchase({
-                id: 1,
-                uniqueId: request.id,
-                orderDate: request.date,
-                totalValue: request.value,
-                purchaseOrderNumber: `PO-${request.id}`,
-                status: 'pending',
-                additionalNotes: '',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                items: [
-                  {
-                    id: 1,
-                    materialId: 1,
-                    materialName: request.materialName,
-                    specifications: request.specifications,
-                    orderedQuantity: parseInt(request.quantity),
-                    receivedQuantity: 0,
-                    pendingQuantity: parseInt(request.quantity),
-                    unitPrice: request.unitPrice,
-                    totalPrice: request.value,
-                    status: 'pending',
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    material: {
-                      id: 1,
-                      name: request.materialName,
-                      specifications: request.specifications,
-                      makerBrand: request.maker,
-                      currentStock: 0,
-                      createdAt: new Date().toISOString(),
-                      updatedAt: new Date().toISOString(),
-                    },
-                  },
-                ],
-                branch: {
-                  id: 1,
-                  name: request.unitName,
-                  location: '',
-                  contactPhone: null,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                },
-                createdBy: {
-                  id: 1,
-                  name: request.requestedBy,
-                  email: '',
-                  company: {} as any,
-                  branch: {} as any,
-                  userType: {} as any,
-                  roles: [],
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                },
-              });
-              setIsReceiveDialogOpen(true);
+            onClick={async () => {
+              try {
+                // First try to get purchase order from the indent's purchases array
+                let purchases = request.originalIndent?.purchases || [];
+                
+                // If purchases not included in the response, fetch the full indent
+                if (purchases.length === 0 && request.originalIndent?.id) {
+                  const fullIndent = await materialIndentsApi.getById(request.originalIndent.id);
+                  purchases = fullIndent.purchases || [];
+                }
+                
+                if (purchases.length === 0) {
+                  toast({
+                    title: 'Error',
+                    description: 'No purchase order found for this indent. Please create a purchase order first.',
+                    variant: 'destructive',
+                  });
+                  return;
+                }
+                
+                // Use the first purchase order (most recent)
+                const purchase = purchases[0];
+                
+                // Verify purchase has items
+                if (!purchase.items || purchase.items.length === 0) {
+                  toast({
+                    title: 'Error',
+                    description: 'Purchase order has no items to receive.',
+                    variant: 'destructive',
+                  });
+                  return;
+                }
+                
+                setSelectedPurchase(purchase);
+                setIsReceiveDialogOpen(true);
+              } catch (error) {
+                console.error('Error fetching purchase order:', error);
+                toast({
+                  title: 'Error',
+                  description: 'Failed to load purchase order. Please try again.',
+                  variant: 'destructive',
+                });
+              }
             }}
           >
             <Package className='w-4 h-4' />
@@ -2676,6 +2763,9 @@ export const MaterialOrderBookTab = () => {
             onExport={() => setIsExportDialogOpen(true)}
             isExporting={isExporting}
             showExport={true}
+            onRefresh={handleRefresh}
+            isRefreshing={isRefreshing}
+            showRefresh={true}
             onAdd={() => navigate('/materials-inventory/material-request')}
             addLabel='INDENT FORM'
             addIcon={<Plus className='w-4 h-4 sm:w-5 sm:h-5 mr-2' />}
@@ -2722,6 +2812,9 @@ export const MaterialOrderBookTab = () => {
             onExport={() => setIsExportDialogOpen(true)}
             isExporting={isExporting}
             showExport={true}
+            onRefresh={handleRefresh}
+            isRefreshing={isRefreshing}
+            showRefresh={true}
             onAdd={() => navigate('/materials-inventory/material-request')}
             addLabel='INDENT FORM'
             addIcon={<Plus className='w-4 h-4 mr-1' />}

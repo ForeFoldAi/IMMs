@@ -30,6 +30,9 @@ import {
   UserRoundPlus,
   CheckCircle,
   Truck,
+  File,
+  FileImage,
+  Download,
 } from 'lucide-react';
 import { Label } from './ui/label';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
@@ -166,6 +169,65 @@ export const RequisitionIndentForm: React.FC<RequisitionIndentFormProps> = ({
     return unit?.name || '';
   };
 
+  // Utility function to determine file type from URL or filename
+  const getFileType = (url: string) => {
+    const extension = url.split('.').pop()?.toLowerCase();
+    
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'bmp':
+      case 'webp':
+        return 'image';
+      case 'pdf':
+        return 'pdf';
+      case 'doc':
+      case 'docx':
+        return 'document';
+      case 'xls':
+      case 'xlsx':
+        return 'spreadsheet';
+      case 'txt':
+        return 'text';
+      default:
+        return 'file';
+    }
+  };
+
+  // Utility function to get appropriate icon for file type
+  const getFileIcon = (url: string) => {
+    const fileType = getFileType(url);
+    
+    switch (fileType) {
+      case 'image':
+        return <FileImage className="w-6 h-6 text-blue-600" />;
+      case 'pdf':
+        return <FileText className="w-6 h-6 text-red-600" />;
+      case 'document':
+        return <FileText className="w-6 h-6 text-blue-600" />;
+      case 'spreadsheet':
+        return <FileText className="w-6 h-6 text-green-600" />;
+      case 'text':
+        return <FileText className="w-6 h-6 text-gray-600" />;
+      default:
+        return <File className="w-6 h-6 text-gray-600" />;
+    }
+  };
+
+  // Utility function to handle file opening/display
+  const handleFileOpen = (url: string) => {
+    const fileType = getFileType(url);
+    
+    if (fileType === 'image') {
+      showImagesInPopup([url], `Quotation File`);
+    } else {
+      // Open document/PDF in new tab for download or viewing
+      window.open(url, '_blank');
+    }
+  };
+
   // Fetch units when component mounts
   useEffect(() => {
     const fetchUnits = async () => {
@@ -218,9 +280,10 @@ export const RequisitionIndentForm: React.FC<RequisitionIndentFormProps> = ({
   const [selectedQuotation, setSelectedQuotation] = useState<VendorQuotation | null>(null);
   const [selectedItemForQuotation, setSelectedItemForQuotation] = useState<RequestItem | null>(null);
   
-  // Add state for images loaded from API
-  const [quotationImagesLoaded, setQuotationImagesLoaded] = useState<Record<string, string[]>>({});
+  // Add state for quotation files loaded from API
+  const [quotationFilesLoaded, setQuotationFilesLoaded] = useState<Record<string, string[]>>({});
   const [itemImagesLoaded, setItemImagesLoaded] = useState<Record<string, string[]>>({});
+  const [failedImageLoads, setFailedImageLoads] = useState<Set<string>>(new Set());
 
   // Add state for partial receipt details popup
   const [isPartialReceiptDetailsOpen, setIsPartialReceiptDetailsOpen] = useState(false);
@@ -228,6 +291,7 @@ export const RequisitionIndentForm: React.FC<RequisitionIndentFormProps> = ({
 
   // Function to show images in popup
   const showImagesInPopup = (images: string[], title: string) => {
+    console.log('showImagesInPopup called with:', { images, title, imagesLength: images.length });
     setSelectedImages(images);
     setPopupTitle(title);
     setIsImagePopupOpen(true);
@@ -240,23 +304,38 @@ export const RequisitionIndentForm: React.FC<RequisitionIndentFormProps> = ({
   };
 
   // Function to load item images from API
-  const loadItemImages = async (itemId: number) => {
+  const loadItemImages = async (itemId: number): Promise<string[]> => {
     try {
       const indentId = requestData.apiData?.id;
       
       if (!indentId) {
         console.warn('No indent ID available for loading item images');
-        return;
+        return [];
       }
 
       console.log('Loading item images for:', { indentId, itemId });
       const imageUrls = await materialIndentsApi.getItemImageUrls(indentId, itemId);
-      console.log('Item image URLs received:', imageUrls);
+      console.log('Raw API response:', imageUrls);
+      console.log('Image URLs type:', typeof imageUrls);
+      console.log('Image URLs length:', Array.isArray(imageUrls) ? imageUrls.length : 'Not an array');
+      console.log('First URL:', Array.isArray(imageUrls) && imageUrls[0] ? imageUrls[0] : 'No first URL');
+      
+      // Ensure we return an array of strings - minimal validation
+      let validImageUrls = [];
+      if (Array.isArray(imageUrls)) {
+        validImageUrls = imageUrls.filter(url => url && typeof url === 'string');
+      } else if (typeof imageUrls === 'string') {
+        validImageUrls = [imageUrls];
+      }
+      console.log('Valid image URLs after filtering:', validImageUrls);
+      console.log('Returning URLs count:', validImageUrls.length);
       
       setItemImagesLoaded(prev => ({
         ...prev,
-        [itemId.toString()]: imageUrls
+        [itemId.toString()]: validImageUrls
       }));
+      
+      return validImageUrls;
     } catch (error) {
       console.error('Error loading item images:', error);
       toast({
@@ -264,35 +343,39 @@ export const RequisitionIndentForm: React.FC<RequisitionIndentFormProps> = ({
         description: 'Failed to load item images',
         variant: 'destructive',
       });
+      return [];
     }
   };
 
-  // Function to load quotation images from API
-  const loadQuotationImages = async (itemId: number) => {
+  // Function to load quotation files from API
+  const loadQuotationFiles = async (itemId: number): Promise<string[]> => {
     try {
       // Extract indent ID from requestData
       const indentId = requestData.apiData?.id;
       
       if (!indentId) {
-        console.warn('No indent ID available for loading quotation images');
-        return;
+        console.warn('No indent ID available for loading quotation files');
+        return [];
       }
 
-      console.log('Loading quotation images for:', { indentId, itemId });
-      const imageUrls = await materialIndentsApi.getItemQuotationImageUrls(indentId, itemId);
-      console.log('Quotation image URLs received:', imageUrls);
+      console.log('Loading quotation files for:', { indentId, itemId });
+      const fileUrls = await materialIndentsApi.getItemQuotationImageUrls(indentId, itemId);
+      console.log('Quotation file URLs received:', fileUrls);
 
-      setQuotationImagesLoaded(prev => ({
+      setQuotationFilesLoaded(prev => ({
         ...prev,
-        [itemId.toString()]: imageUrls
+        [itemId.toString()]: fileUrls
       }));
+      
+      return fileUrls;
     } catch (error) {
-      console.error('Error loading quotation images:', error);
+      console.error('Error loading quotation files:', error);
       toast({
         title: 'Error',
-        description: 'Failed to load quotation images',
+        description: 'Failed to load quotation files',
         variant: 'destructive',
       });
+      return [];
     }
   };
 
@@ -302,13 +385,74 @@ export const RequisitionIndentForm: React.FC<RequisitionIndentFormProps> = ({
     setSelectedItemForQuotation(item);
     setIsQuotationPopupOpen(true);
     
-    // Load quotation images using API
-    loadQuotationImages(parseInt(item.id, 10));
+    // Load quotation files using API
+    loadQuotationFiles(parseInt(item.id, 10));
   };
 
   const handleItemChange = (itemId: string, field: string, value: string) => {
     if (!isReadOnly && onItemChange) {
       onItemChange(itemId, field, value);
+    }
+  };
+
+  // Handle multiple file uploads for item images
+  const handleMultipleFileChange = (itemId: string, files: FileList | File[]) => {
+    if (!isReadOnly) {
+      const newFiles = Array.isArray(files) ? files : Array.from(files);
+      console.log('handleMultipleFileChange called with files:', newFiles);
+      console.log('Item ID:', itemId);
+      console.log('Files count:', newFiles.length);
+      
+      const newPreviews: string[] = [];
+
+      newFiles.forEach((file) => {
+        console.log('Processing file:', file.name, file.type, file.size);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          newPreviews.push(e.target?.result as string);
+          console.log('Preview generated, total:', newPreviews.length, 'expected:', newFiles.length);
+          
+          if (newPreviews.length === newFiles.length) {
+            // Update the item's images and previews in requestData
+            const currentItem = requestData.items.find(item => item.id === itemId);
+            console.log('Current item found:', !!currentItem);
+            
+            if (currentItem) {
+              // Store images directly in the item
+              currentItem.images = [...(currentItem.images || []), ...newFiles];
+              currentItem.imagePreviews = [
+                ...(currentItem.imagePreviews || []),
+                ...newPreviews,
+              ];
+              
+              console.log('Updated item with images:', currentItem.images.length, 'files');
+              console.log('Updated item with previews:', currentItem.imagePreviews.length, 'previews');
+              
+              // Trigger re-render by updating vendor quotations
+              if (onVendorQuotationChange) {
+                onVendorQuotationChange(itemId, currentItem.vendorQuotations);
+              }
+            }
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  // Remove image from item
+  const removeImage = (itemId: string, imageIndex: number) => {
+    if (!isReadOnly) {
+      const currentItem = requestData.items.find(item => item.id === itemId);
+      if (currentItem) {
+        currentItem.images = currentItem.images?.filter((_, index) => index !== imageIndex) || [];
+        currentItem.imagePreviews = currentItem.imagePreviews?.filter((_, index) => index !== imageIndex) || [];
+        
+        // Trigger re-render
+        if (onVendorQuotationChange) {
+          onVendorQuotationChange(itemId, currentItem.vendorQuotations);
+        }
+      }
     }
   };
 
@@ -377,6 +521,12 @@ export const RequisitionIndentForm: React.FC<RequisitionIndentFormProps> = ({
         notes: '',
         quotationFile: null,
       });
+
+      // Clear the file input after successful quotation addition
+      const fileInput = document.getElementById('quotationFile');
+      if (fileInput) {
+        (fileInput as HTMLInputElement).value = '';
+      }
 
       toast({
         title: 'Vendor Quotation Added',
@@ -743,38 +893,150 @@ export const RequisitionIndentForm: React.FC<RequisitionIndentFormProps> = ({
                     </TableCell>
                     <TableCell className='border border-gray-300'>
                       <div className='space-y-2'>
-                        {/* Load and display item images */}
-                        <div className='flex items-center gap-2'>
-                          <Button
-                            variant='outline'
-                            size='sm'
-                            onClick={async () => {
-                              // Load images from API
-                              await loadItemImages(parseInt(item.id, 10));
-                              
-                              // Show images in popup if they exist
-                              const images = itemImagesLoaded[item.id] || itemImageUrlsMap[item.id] || [];
-                              if (images.length > 0) {
-                                showImagesInPopup(
-                                  images,
-                                  `Item Images - ${item.productName}`
-                                );
-                              } else {
-                                toast({
-                                  title: 'No Images',
-                                  description: 'No images available for this item',
-                                  variant: 'default',
-                                });
-                              }
-                            }}
-                            disabled={!isReadOnly}
-                            className='gap-2 w-full'
-                          >
-                            <Eye className='w-4 h-4' />
-                            <span className='hidden sm:inline'>View Images</span>
-                          </Button>
-                        </div>
-                        {/* Thumbnails hidden per requirements */}
+                        {/* Image upload for editable forms */}
+                        {!isReadOnly ? (
+                          <>
+                            {/* Hidden file input */}
+                            <input
+                              type='file'
+                              accept='image/*'
+                              multiple
+                              id={`image-upload-${item.id}`}
+                              className='hidden'
+                              onChange={(e) => {
+                                console.log('File input onChange triggered');
+                                const files = e.target.files;
+                                console.log('Files selected:', files);
+                                
+                                if (files && files.length > 0) {
+                                  console.log('Processing', files.length, 'files');
+                                  
+                                  // Validate file size (5MB limit)
+                                  const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+                                  const validFiles: File[] = [];
+                                  const invalidFiles: string[] = [];
+
+                                  Array.from(files).forEach((file) => {
+                                    if (file.size > maxSize) {
+                                      invalidFiles.push(file.name);
+                                    } else {
+                                      validFiles.push(file);
+                                    }
+                                  });
+
+                                  // Show error for files that are too large
+                                  if (invalidFiles.length > 0) {
+                                    toast({
+                                      title: 'File Size Error',
+                                      description: `The following files exceed 5MB limit: ${invalidFiles.join(', ')}`,
+                                      variant: 'destructive',
+                                    });
+                                  }
+
+                                  // Process valid files
+                                  if (validFiles.length > 0) {
+                                    console.log('Calling handleMultipleFileChange with', validFiles.length, 'valid files');
+                                    handleMultipleFileChange(item.id, validFiles as any);
+                                  } else {
+                                    console.log('No valid files to process');
+                                  }
+                                }
+                              }}
+                            />
+                            
+                            {/* Upload button with + icon */}
+                            <Button
+                              type='button'
+                              variant='outline'
+                              size='sm'
+                              onClick={() => {
+                                console.log('Upload button clicked for item:', item.id);
+                                const fileInput = document.getElementById(`image-upload-${item.id}`);
+                                console.log('File input element:', fileInput);
+                                fileInput?.click();
+                              }}
+                              className='w-full h-8 gap-2'
+                            >
+                              <Plus className='w-4 h-4' />
+                              Upload Image
+                            </Button>
+                            
+                            {/* Supported formats info */}
+                            <div className='text-xs text-muted-foreground mt-1'>
+                              Supported: JPG, PNG, GIF
+                            </div>
+                            
+                            {/* Show uploaded image previews */}
+                            {item.imagePreviews && item.imagePreviews.length > 0 && (
+                              <div className='grid grid-cols-3 gap-1 mt-2'>
+                                {item.imagePreviews.map((preview, index) => (
+                                  <div
+                                    key={index}
+                                    className='relative w-12 h-12 rounded border overflow-hidden'
+                                  >
+                                    <img
+                                      src={preview}
+                                      alt={`Preview ${index + 1}`}
+                                      className='w-full h-full object-cover'
+                                    />
+                                    <Button
+                                      variant='ghost'
+                                      size='sm'
+                                      onClick={() => removeImage(item.id, index)}
+                                      className='absolute -top-1 -right-1 h-4 w-4 p-0 bg-red-500 text-white hover:bg-red-600 rounded-full'
+                                    >
+                                      <X className='w-2 h-2' />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          /* Read-only: Show view button */
+                          <div className='flex items-center gap-2'>
+                            <Button
+                              variant='outline'
+                              size='sm'
+                              onClick={async () => {
+                                console.log('Button clicked for item:', item.id);
+                                
+                                try {
+                                  // Load images from API
+                                  const loadedImages = await loadItemImages(parseInt(item.id, 10));
+                                  console.log('Loaded images after API call:', loadedImages);
+                                  
+                                  // Use loaded images directly - no fallback needed since we return from API
+                                  if (loadedImages && loadedImages.length > 0) {
+                                    console.log('Showing images in popup with loaded images:', loadedImages);
+                                    showImagesInPopup(
+                                      loadedImages,
+                                      `Item Images - ${item.productName}`
+                                    );
+                                  } else {
+                                    console.log('No images returned from API - showing error toast');
+                                    toast({
+                                      title: 'No Images',
+                                      description: 'No images available for this item',
+                                      variant: 'default',
+                                    });
+                                  }
+                                } catch (error) {
+                                  console.error('Error in button click handler:', error);
+                                  toast({
+                                    title: 'Error',
+                                    description: 'Failed to load images',
+                                    variant: 'destructive',
+                                  });
+                                }
+                              }}
+                              className='gap-2 w-full'
+                            >
+                              <Eye className='w-4 h-4' />
+                              <span className='hidden sm:inline'>View Images</span>
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className='border border-gray-300'>
@@ -1304,9 +1566,6 @@ export const RequisitionIndentForm: React.FC<RequisitionIndentFormProps> = ({
                     className='h-10 px-3 py-2 border border-input bg-background hover:border-primary/50 focus:border-transparent focus:ring-0 outline-none rounded-md text-sm transition-all duration-200'
                   />
                 </div>
-              </div>
-
-              <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                 <div className='space-y-2'>
                   <Label
                     htmlFor='quotationFile'
@@ -1321,11 +1580,28 @@ export const RequisitionIndentForm: React.FC<RequisitionIndentFormProps> = ({
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
+                        // Validate file size (5MB limit)
+                        const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+                        
+                        if (file.size > maxSize) {
+                          toast({
+                            title: 'File Size Error',
+                            description: `File "${file.name}" exceeds 5MB limit. Please select a smaller file.`,
+                            variant: 'destructive',
+                          });
+                          // Clear the file input
+                          e.target.value = '';
+                          return;
+                        }
+                        
                         handleVendorFileChange(file);
                       }
                     }}
                     className='h-10 px-3 py-2 border border-input bg-background hover:border-primary/50 focus:border-transparent focus:ring-0 outline-none rounded-md text-sm transition-all duration-200'
                   />
+                  <div className='text-xs text-muted-foreground'>
+                    Supported formats: PDF, DOC, DOCX, JPG, JPEG, PNG
+                  </div>
                 </div>
                 <div className='space-y-2'>
                   <Label htmlFor='notes' className='text-sm font-medium'>
@@ -1400,32 +1676,39 @@ export const RequisitionIndentForm: React.FC<RequisitionIndentFormProps> = ({
 
             {/* Content */}
             <div className='p-4 overflow-y-auto max-h-[60vh]'>
+              {(() => {
+                console.log('Popup rendering with selectedImages:', selectedImages, 'Length:', selectedImages.length);
+                return null;
+              })()}
               {selectedImages.length > 0 ? (
                 <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
-                  {selectedImages.map((imageUrl, index) => (
-                    <div key={index} className='relative group'>
-                      <img
-                        src={imageUrl}
-                        alt={`Image ${index + 1}`}
-                        className='w-full h-48 object-cover rounded-lg border border-gray-200 hover:border-primary transition-colors'
-                        onLoad={() => console.log('Image loaded successfully:', imageUrl)}
-                        onError={(e) => {
-                          console.error('Failed to load image:', imageUrl, e);
-                          toast({
-                            title: 'Image Load Error',
-                            description: `Failed to load image: ${imageUrl}`,
-                            variant: 'destructive',
-                          });
-                        }}
-                      />
-                      <div className='absolute top-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs'>
-                        Image {index + 1}
+                  {selectedImages.map((imageUrl, index) => {
+                    console.log('Rendering image:', { index, imageUrl });
+                    return (
+                      <div key={index} className='relative group'>
+                        <img
+                          src={imageUrl}
+                          alt={`Image ${index + 1}`}
+                          className='w-full h-48 object-cover rounded-lg border border-gray-200 hover:border-primary transition-colors'
+                          onLoad={() => console.log('Image loaded successfully:', imageUrl)}
+                          onError={(e) => {
+                            console.error('Failed to load image:', imageUrl, e);
+                            toast({
+                              title: 'Image Load Error',
+                              description: `Failed to load image: ${imageUrl}`,
+                              variant: 'destructive',
+                            });
+                          }}
+                        />
+                        <div className='absolute top-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs'>
+                          Image {index + 1}
+                        </div>
+                        <div className='absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs max-w-[200px] truncate'>
+                          {imageUrl}
+                        </div>
                       </div>
-                      <div className='absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs max-w-[200px] truncate'>
-                        {imageUrl}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className='text-center py-8 text-muted-foreground'>
@@ -1520,58 +1803,102 @@ export const RequisitionIndentForm: React.FC<RequisitionIndentFormProps> = ({
                   </div>
                 </div>
 
-                {/* Quotation Images */}
+                {/* Quotation Files */}
                 <div className='space-y-4'>
-                  <h4 className='font-semibold text-gray-800'>Quotation Images</h4>
-                  {/* Display images loaded from API */}
-                  {quotationImagesLoaded[selectedItemForQuotation.id] && 
-                   quotationImagesLoaded[selectedItemForQuotation.id].length > 0 ? (
+                  <h4 className='font-semibold text-gray-800'>Quotation Files</h4>
+                  {/* Display files loaded from API */}
+                  {quotationFilesLoaded[selectedItemForQuotation.id] && 
+                   quotationFilesLoaded[selectedItemForQuotation.id].length > 0 ? (
                     <div className='grid grid-cols-1 gap-4'>
-                      {quotationImagesLoaded[selectedItemForQuotation.id].map((imageUrl, index) => (
-                        <div key={`quotation-${index}`} className='relative group'>
-                          <img
-                            src={imageUrl}
-                            alt={`Quotation Image ${index + 1}`}
-                            className='w-full h-48 object-cover rounded-lg border border-gray-200 hover:border-primary transition-colors cursor-pointer'
-                            onClick={() => showImagesInPopup([imageUrl], `Quotation Image ${index + 1}`)}
-                            onError={(e) => {
-                              console.error('Failed to load image:', imageUrl);
-                              e.currentTarget.style.display = 'none';
-                            }}
-                          />
-                          <div className='absolute top-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs'>
-                            Image {index + 1}
+                      {quotationFilesLoaded[selectedItemForQuotation.id].map((fileUrl, index) => {
+                        const fileType = getFileType(fileUrl);
+                        const fileName = fileUrl.split('/').pop() || `File ${index + 1}`;
+                        const isImage = fileType === 'image';
+                        
+                        const imageLoadFailed = failedImageLoads.has(fileUrl);
+                        
+                        return (
+                          <div key={`quotation-file-${index}`} className='relative group'>
+                            {isImage && !imageLoadFailed ? (
+                              // For images, show the image with overlay
+                              <>
+                                <img
+                                  src={fileUrl}
+                                  alt={`Quotation File ${index + 1}`}
+                                  className='w-full h-48 object-cover rounded-lg border border-gray-200 hover:border-primary transition-colors cursor-pointer'
+                                  onClick={() => handleFileOpen(fileUrl)}
+                                  onError={() => {
+                                    console.error('Failed to load image:', fileUrl);
+                                    setFailedImageLoads(prev => new Set(prev).add(fileUrl));
+                                  }}
+                                />
+                                <div className='absolute top-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs'>
+                                  Image {index + 1}
+                                </div>
+                                <div className='absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center'>
+                                  <div className='opacity-0 group-hover:opacity-100 transition-opacity'>
+                                    <Button
+                                      variant='secondary'
+                                      size='sm'
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleFileOpen(fileUrl);
+                                      }}
+                                      className='gap-2'
+                                    >
+                                      <Eye className='w-4 h-4' />
+                                      View Preview
+                                    </Button>
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              // For documents/PDFs or failed images, show file icon with details
+                              <div className={`w-full ${isImage ? 'h-48' : 'h-32'} bg-gray-50 border border-gray-200 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition-colors group`}
+                                   onClick={() => handleFileOpen(fileUrl)}>
+                                <div className='flex flex-col items-center justify-center space-y-2'>
+                                  {getFileIcon(fileUrl)}
+                                  <div className='text-center px-4'>
+                                    <div className='text-sm font-medium text-gray-700 truncate max-w-48'>
+                                      {fileName}
+                                    </div>
+                                    <div className='text-xs text-gray-500 uppercase'>
+                                      {fileType}
+                                    </div>
+                                  </div>
+                                  <Button
+                                    variant='outline'
+                                    size='sm'
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleFileOpen(fileUrl);
+                                    }}
+                                    className='gap-2 opacity-0 group-hover:opacity-100 transition-opacity'
+                                  >
+                                    <Download className='w-4 h-4' />
+                                    {isImage ? 'View File' : 'Open File'}
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          <div className='absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center'>
-                            <div className='opacity-0 group-hover:opacity-100 transition-opacity'>
-                              <Button
-                                variant='secondary'
-                                size='sm'
-                                onClick={() => showImagesInPopup([imageUrl], `Quotation Image ${index + 1}`)}
-                                className='gap-2'
-                              >
-                                <Eye className='w-4 h-4' />
-                                View Preview
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className='text-center py-8 text-muted-foreground'>
                       <FileText className='w-12 h-12 mx-auto mb-4 opacity-50' />
-                      <p>No quotation images available</p>
+                      <p>No quotation files available</p>
                       <p className='text-xs mt-2'>
-                        Loading images for item ID: {selectedItemForQuotation.id}
+                        Loading files for item ID: {selectedItemForQuotation.id}
                       </p>
                       <Button
                         variant='outline'
                         size='sm'
-                        onClick={() => loadQuotationImages(parseInt(selectedItemForQuotation.id, 10))}
+                        onClick={() => loadQuotationFiles(parseInt(selectedItemForQuotation.id, 10))}
                         className='mt-2'
                       >
-                        Retry Loading Images
+                        Retry Loading Files
                       </Button>
                     </div>
                   )}

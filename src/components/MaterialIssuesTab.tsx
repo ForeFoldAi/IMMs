@@ -167,6 +167,7 @@ export const MaterialIssuesTab = () => {
   const [isLoadingBranches, setIsLoadingBranches] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isExporting, setIsExporting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [exportDateRange, setExportDateRange] = useState({
     from: '',
@@ -516,6 +517,19 @@ export const MaterialIssuesTab = () => {
       setError(errorMessage);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Handle refresh
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      const apiSortBy = sortField === 'uniqueId' ? 'id' : sortField;
+      await fetchMaterialIssues(currentPage, itemsPerPage, apiSortBy, sortOrder);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -932,6 +946,9 @@ export const MaterialIssuesTab = () => {
         onExport={() => setIsExportDialogOpen(true)}
         isExporting={isExporting}
         showExport={true}
+        onRefresh={handleRefresh}
+        isRefreshing={isRefreshing}
+        showRefresh={true}
         onAdd={() => setIsIssueFormOpen(true)}
         addLabel='Issue Materials'
         showAddButton={currentUser?.role !== 'company_owner'}
@@ -1085,7 +1102,7 @@ export const MaterialIssuesTab = () => {
                             <TableCell className='font-medium text-sm py-3'>
                               <Button
                                 variant='link'
-                                className='p-0 h-auto text-left font-semibold text-primary hover:text-primary/80 text-sm uppercase'
+                                className='p-0 h-auto text-left font-semibold text-black hover:text-primary/80 text-sm uppercase'
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleViewIssue(issue);
@@ -1120,13 +1137,13 @@ export const MaterialIssuesTab = () => {
                                   <span className='text-muted-foreground'>
                                     Existing:
                                   </span>
-                                  <span className='text-foreground'>
+                                  <span className='text-black'>
                                     {item.existingStock}{' '}
                                     {item.originalItem.material.measureUnit
                                       ?.name || 'units'}
                                   </span>
                                 </div>
-                                <div className='flex items-center justify-between text-xs font-bold text-primary'>
+                                <div className='flex items-center justify-between text-xs font-bold text-black'>
                                   <span className='text-muted-foreground'>
                                     Issued:
                                   </span>
@@ -1141,7 +1158,7 @@ export const MaterialIssuesTab = () => {
                                   <span className='text-muted-foreground'>
                                     After:
                                   </span>
-                                  <span className='text-foreground'>
+                                  <span className='text-black'>
                                     {item.stockAfterIssue}{' '}
                                     {item.originalItem.material.measureUnit
                                       ?.name || 'units'}
@@ -1189,12 +1206,12 @@ export const MaterialIssuesTab = () => {
                               <div className='space-y-1'>
                                 <Badge
                                   variant='outline'
-                                  className='text-xs bg-primary/10 text-primary border-primary/30'
+                                  className='text-xs bg-primary/10 text-black border-primary/30'
                                 >
                                   {issue.unitName}
                                 </Badge>
                                 {issue.branchLocation && (
-                                  <div className='text-xs text-muted-foreground'>
+                                  <div className='text-xs text-black'>
                                     {issue.branchLocation}
                                   </div>
                                 )}
@@ -1356,7 +1373,7 @@ export const MaterialIssuesTab = () => {
                               <TableCell className='font-medium text-xs'>
                                 <Button
                                   variant='link'
-                                  className='p-0 h-auto text-left font-medium text-primary hover:text-primary/80 uppercase text-xs'
+                                  className='p-0 h-auto text-left font-medium text-black hover:text-primary/80 uppercase text-xs'
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleViewIssue(issue);
@@ -1391,11 +1408,13 @@ export const MaterialIssuesTab = () => {
                                     <span className='text-muted-foreground'>
                                       Existing:
                                     </span>{' '}
-                                    {item.existingStock}{' '}
-                                    {item.originalItem.material.measureUnit
-                                      ?.name || 'units'}
+                                    <span className='text-black'>
+                                      {item.existingStock}{' '}
+                                      {item.originalItem.material.measureUnit
+                                        ?.name || 'units'}
+                                    </span>
                                   </div>
-                                  <div className='text-primary font-bold'>
+                                  <div className='text-black font-bold'>
                                     <span className='text-muted-foreground font-bold'>
                                       Issued:
                                     </span>{' '}
@@ -1408,9 +1427,11 @@ export const MaterialIssuesTab = () => {
                                     <span className='text-muted-foreground'>
                                       After:
                                     </span>{' '}
-                                    {item.stockAfterIssue}{' '}
-                                    {item.originalItem.material.measureUnit
-                                      ?.name || 'units'}
+                                    <span className='text-black'>
+                                      {item.stockAfterIssue}{' '}
+                                      {item.originalItem.material.measureUnit
+                                        ?.name || 'units'}
+                                    </span>
                                   </div>
                                 </div>
                               </TableCell>
@@ -1431,11 +1452,11 @@ export const MaterialIssuesTab = () => {
                               </TableCell>
                               <TableCell className='text-xs'>
                                 <div className='space-y-1'>
-                                  <Badge variant='outline' className='text-xs'>
+                                  <Badge variant='outline' className='text-xs text-black'>
                                     {issue.unitName}
                                   </Badge>
                                   {issue.branchLocation && (
-                                    <div className='text-xs text-muted-foreground'>
+                                    <div className='text-xs text-black'>
                                       {issue.branchLocation}
                                     </div>
                                   )}

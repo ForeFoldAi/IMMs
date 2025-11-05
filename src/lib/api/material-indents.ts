@@ -139,14 +139,12 @@ export const materialIndentsApi = {
     return response.data;
   },
 
-  reSubmit: async (id: number, newData: Partial<MaterialIndent>) => {
+  reSubmit: async (id: number, newData: Partial<MaterialIndent> | FormData) => {
     const headers =
       newData instanceof FormData
-        ? { 'Content-Type': 'multipart/form-data'
+        ? { 'Content-Type': 'multipart/form-data' }
+        : { 'Content-Type': 'application/json' };
 
-         }: { 'Content-Type': 'application/json' };
-
-       
     const response = await api.post<MaterialIndent>(
       `/inventory/material-indents/${id}/submit`,
       newData,
