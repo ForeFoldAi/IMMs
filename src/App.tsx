@@ -16,6 +16,7 @@ import MaterialRequest from './pages/MaterialRequest';
 import AddStock from './pages/AddStock';
 import OrganizationalManagement from './pages/OrganizationalManagement';
 import RequestDetails from './pages/RequestDetails';
+import { FleetManagement } from './pages/fleet_page/fleet_management';
 import { Alert, AlertDescription } from './components/ui/alert';
 import { Wifi, WifiOff } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -140,6 +141,7 @@ const AppRoutes = () => {
           path='organizational-management'
           element={<OrganizationalManagement />}
         />
+        <Route path='fleet-management' element={<FleetManagement />} />
       
        
         <Route path='request-details/:requestId' element={<RequestDetails />} />
