@@ -1770,9 +1770,47 @@ export const MaterialOrderBookTab = () => {
           bValue = b.originalId || 0;
           break;
         case 'requestDate':
-          // Convert date strings to timestamps for proper chronological sorting
-          aValue = new Date(a.date.split('/').reverse().join('-')).getTime() || 0;
-          bValue = new Date(b.date.split('/').reverse().join('-')).getTime() || 0;
+          // Convert date strings (DD-MM-YYYY or DD/MM/YYYY format) to timestamps for proper chronological sorting
+          // Empty dates should sort to the end regardless of sort order
+          const parseRequestDate = (dateStr: string): number => {
+            if (!dateStr || !dateStr.trim()) {
+              // Return a very large number so empty dates sort to the end
+              return Number.MAX_SAFE_INTEGER;
+            }
+            
+            // Handle DD-MM-YYYY format (with dashes)
+            if (dateStr.includes('-')) {
+              const dateParts = dateStr.split('-');
+              if (dateParts.length === 3 && dateParts[0].length === 2) {
+                // DD-MM-YYYY format
+                const [day, month, year] = dateParts;
+                const parsed = new Date(`${year}-${month}-${day}`).getTime();
+                return isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
+              } else {
+                // Try parsing as-is (might be YYYY-MM-DD)
+                const parsed = new Date(dateStr).getTime();
+                return isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
+              }
+            }
+            
+            // Handle DD/MM/YYYY format (with slashes)
+            if (dateStr.includes('/')) {
+              const dateParts = dateStr.split('/');
+              if (dateParts.length === 3 && dateParts[0].length === 2) {
+                // DD/MM/YYYY format
+                const [day, month, year] = dateParts;
+                const parsed = new Date(`${year}-${month}-${day}`).getTime();
+                return isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
+              }
+            }
+            
+            // Try parsing as-is (might be ISO format or other)
+            const parsed = new Date(dateStr).getTime();
+            return isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
+          };
+          
+          aValue = parseRequestDate(a.date || '');
+          bValue = parseRequestDate(b.date || '');
           break;
         case 'materialName':
           aValue = a.materialName?.toLowerCase() || '';
@@ -1802,8 +1840,34 @@ export const MaterialOrderBookTab = () => {
           bValue = b.approvedBy?.toLowerCase() || '';
           break;
         case 'receivedDate':
-          aValue = a.receivedDate || '';
-          bValue = b.receivedDate || '';
+          // Convert date strings (DD-MM-YYYY format) to timestamps for proper chronological sorting
+          // Empty dates should sort to the end regardless of sort order
+          const parseReceivedDate = (dateStr: string): number => {
+            if (!dateStr || !dateStr.trim()) {
+              // Return a very large number so empty dates sort to the end
+              return Number.MAX_SAFE_INTEGER;
+            }
+            
+            if (dateStr.includes('-')) {
+              const dateParts = dateStr.split('-');
+              if (dateParts.length === 3 && dateParts[0].length === 2) {
+                // DD-MM-YYYY format
+                const parsed = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`).getTime();
+                return isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
+              } else {
+                // Try parsing as-is (might be YYYY-MM-DD)
+                const parsed = new Date(dateStr).getTime();
+                return isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
+              }
+            }
+            
+            // Try parsing as-is
+            const parsed = new Date(dateStr).getTime();
+            return isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
+          };
+          
+          aValue = parseReceivedDate(a.receivedDate || '');
+          bValue = parseReceivedDate(b.receivedDate || '');
           break;
         case 'machineName':
           aValue = a.machineName?.toLowerCase() || '';

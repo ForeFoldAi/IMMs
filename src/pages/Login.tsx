@@ -95,7 +95,7 @@ const Login = () => {
             <div className='space-y-2'>
               <div className='flex items-center justify-center'>
                 <img 
-                  src="/logo.png" 
+                  src="/bg.png" 
                   alt="Sree Sal Roller Flour Mill Pvt Ltd" 
                   className='h-20 w-auto object-contain'
                   style={{
@@ -212,11 +212,7 @@ const Login = () => {
 
         {/* Footer credits */}
         <div className='mt-6 space-y-2'>
-          <div className='text-center'>
-            <p className='text-xs text-slate-300 font-medium'>
-              © 2022 Sree Sai Roller Flour Mill Pvt. Ltd. All rights reserved.
-            </p>
-          </div>
+          
           <div className='text-center'>
             <p className='text-xs text-slate-400'>
             Developed & Maintained by <span className='font-semibold' style={{ color: '#f2b10e' }}><a 

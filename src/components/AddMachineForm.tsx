@@ -138,9 +138,23 @@ export const AddMachineForm = ({
     }
   };
 
-  // Prefill form data when editing
+  // Track if form has been initialized to prevent resetting when machineTypes/branches update
+  const [formInitialized, setFormInitialized] = useState(false);
+
+  // Prefill form data when editing or reset when dialog opens for new machine
   useEffect(() => {
-    if (editingData && isOpen) {
+    if (!isOpen) {
+      // Reset initialization flag when dialog closes
+      setFormInitialized(false);
+      return;
+    }
+
+    // Only initialize form once when dialog opens
+    if (formInitialized) {
+      return;
+    }
+
+    if (editingData) {
       // Find the typeId and unitId from the fetched data
       const typeId = machineTypes.find(type => type.name === editingData.type)?.id || 0;
       const unitId = branches.find(branch => branch.name === editingData.branchName)?.id || 0;
@@ -162,8 +176,9 @@ export const AddMachineForm = ({
         nextMaintenanceDue: convertDateForInput(editingData.nextMaintenanceDue),
         additionalNotes: editingData.additionalNotes,
       });
-    } else if (!editingData && isOpen) {
-      // Reset form when adding new machine
+      setFormInitialized(true);
+    } else {
+      // Reset form when adding new machine (only on first open)
       const fullUserData = getFullUserData();
       const defaultUnitId = fullUserData?.branch?.id || 0;
       
@@ -184,8 +199,41 @@ export const AddMachineForm = ({
         nextMaintenanceDue: '',
         additionalNotes: '',
       });
+      setFormInitialized(true);
     }
-  }, [editingData, isOpen, machineTypes, branches]);
+  }, [editingData, isOpen, formInitialized]);
+
+  // Update typeId when machineTypes are loaded and editingData exists
+  useEffect(() => {
+    if (editingData && isOpen && formInitialized && machineTypes.length > 0) {
+      const typeId = machineTypes.find(type => type.name === editingData.type)?.id;
+      if (typeId) {
+        setFormData(prev => {
+          // Only update if different to avoid unnecessary re-renders
+          if (prev.typeId !== typeId) {
+            return { ...prev, typeId };
+          }
+          return prev;
+        });
+      }
+    }
+  }, [machineTypes, editingData, isOpen, formInitialized]);
+
+  // Update unitId when branches are loaded and editingData exists
+  useEffect(() => {
+    if (editingData && isOpen && formInitialized && branches.length > 0) {
+      const unitId = branches.find(branch => branch.name === editingData.branchName)?.id;
+      if (unitId) {
+        setFormData(prev => {
+          // Only update if different to avoid unnecessary re-renders
+          if (prev.unitId !== unitId) {
+            return { ...prev, unitId };
+          }
+          return prev;
+        });
+      }
+    }
+  }, [branches, editingData, isOpen, formInitialized]);
 
   // Fetch machine types and branches on component mount
   useEffect(() => {

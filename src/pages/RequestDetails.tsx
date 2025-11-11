@@ -10,6 +10,7 @@ import {
   CheckCircle,
   XCircle,
   Truck,
+  Printer,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import {
@@ -151,6 +152,7 @@ const RequestDetails: React.FC = () => {
   const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
   const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
   const [isReceiveDialogOpen, setIsReceiveDialogOpen] = useState(false);
+  const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
   const [resetStatusDropdown, setResetStatusDropdown] = useState<(() => void) | null>(null);
   const [selectedPurchase, setSelectedPurchase] =
     useState<MaterialPurchase | null>(null);
@@ -918,6 +920,7 @@ const RequestDetails: React.FC = () => {
       });
 
       // Navigate back to MaterialOrderBookTab after successful submission
+      // Always navigate back for status changes that require it, especially for company owners
       if (shouldNavigateBack) {
         setTimeout(() => {
           navigate('/materials-inventory', {
@@ -1204,6 +1207,14 @@ const RequestDetails: React.FC = () => {
       return !item.quotations || item.quotations.length === 0;
     });
   };
+
+  // Add function to check if print icon should be shown
+  // const shouldShowPrintIcon = () => {
+  //   if (!requestData) return false;
+  //   
+  //   const allowedStatuses = ['approved', 'ordered', 'partially_received', 'fully_received'];
+  //   return allowedStatuses.includes(requestData.status);
+  // };
 
   // State for last five material indents
   const [lastFiveIndents, setLastFiveIndents] = useState<MaterialIndent[]>([]);
@@ -1609,12 +1620,25 @@ const RequestDetails: React.FC = () => {
         <div className='flex items-center gap-6'>
           {/* Request Summary Info */}
           <div className='flex items-center gap-6 text-sm'>
-            <div>
-              <Label className='text-xs font-medium text-muted-foreground'>
-                Requested By
-              </Label>
-              <div className='font-semibold'>
-                {requestData.requestedBy}
+            <div className='flex items-center gap-2'>
+              {/* {shouldShowPrintIcon() && (
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={() => setIsPrintDialogOpen(true)}
+                  className='gap-1 px-2 py-1'
+                  title='Print Request Details'
+                >
+                  <Printer className='w-4 h-4' />
+                </Button>
+              )} */}
+              <div>
+                <Label className='text-xs font-medium text-muted-foreground'>
+                  Requested By
+                </Label>
+                <div className='font-semibold'>
+                  {requestData.requestedBy}
+                </div>
               </div>
             </div>
             <div>
@@ -1713,12 +1737,25 @@ const RequestDetails: React.FC = () => {
 
         {/* Row 2: Request Info Grid */}
         <div className='grid grid-cols-2 gap-2 bg-secondary/10 p-3 rounded-lg'>
-          <div>
-            <Label className='text-[10px] font-medium text-muted-foreground'>
-              Requested By
-            </Label>
-            <div className='font-semibold text-xs truncate'>
-              {requestData.requestedBy}
+          <div className='flex items-center gap-2'>
+            {/* {shouldShowPrintIcon() && (
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => setIsPrintDialogOpen(true)}
+                className='gap-1 px-2 py-1 flex-shrink-0'
+                title='Print Request Details'
+              >
+                <Printer className='w-3 h-3' />
+              </Button>
+            )} */}
+            <div className='flex-1 min-w-0'>
+              <Label className='text-[10px] font-medium text-muted-foreground'>
+                Requested By
+              </Label>
+              <div className='font-semibold text-xs truncate'>
+                {requestData.requestedBy}
+              </div>
             </div>
           </div>
           <div>
@@ -1967,6 +2004,15 @@ const RequestDetails: React.FC = () => {
               title: 'Success',
               description: 'Material indent approved successfully.',
             });
+
+            // Navigate back to MaterialOrderBookTab after successful approval for company owners
+            if (isCompanyLevel()) {
+              setTimeout(() => {
+                navigate('/materials-inventory', {
+                  state: { activeTab: 'material-order-book' },
+                });
+              }, 1500);
+            }
           }}
           materialIndent={requestData.apiData}
           preSelectedVendors={selectedVendors}
@@ -2171,6 +2217,155 @@ const RequestDetails: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Print Dialog */}
+      <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
+        <DialogContent className='max-w-4xl max-h-[90vh] overflow-y-auto'>
+          <DialogHeader>
+            <DialogTitle className='flex items-center gap-2'>
+              <Printer className='w-5 h-5' />
+              Print Request Details
+            </DialogTitle>
+          </DialogHeader>
+          <div className='space-y-6'>
+            {requestData && (
+              <div className='space-y-6'>
+                {/* Header Information */}
+                <div className='bg-gray-50 p-4 rounded-lg'>
+                  <h3 className='text-lg font-semibold mb-4'>Request Information</h3>
+                  <div className='grid grid-cols-2 gap-4 text-sm'>
+                    <div>
+                      <span className='font-medium'>Request ID:</span> {requestData.id}
+                    </div>
+                    <div>
+                      <span className='font-medium'>Requested By:</span> {requestData.requestedBy}
+                    </div>
+                    <div>
+                      <span className='font-medium'>Unit/Location:</span> {requestData.location}
+                    </div>
+                    <div>
+                      <span className='font-medium'>Request Date:</span> {formatDateToDDMMYYYY(requestData.date)}
+                    </div>
+                    <div>
+                      <span className='font-medium'>Status:</span> approved
+                    </div>
+                    <div>
+                      <span className='font-medium'>Approved By:</span> {requestData.apiData?.approvedBy?.name || 'N/A'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Items List */}
+                <div className='space-y-4'>
+                  <h3 className='text-lg font-semibold'>Requested Items</h3>
+                  {requestData.items.map((item, index) => (
+                    <div key={item.id} className='border border-gray-200 rounded-lg p-4'>
+                      <div className='flex justify-between items-start mb-3'>
+                        <h4 className='font-semibold text-lg'>Item {index + 1}</h4>
+                        <Badge variant='outline'>{item.purposeType}</Badge>
+                      </div>
+                      
+                      <div className='grid grid-cols-2 gap-4 text-sm mb-4'>
+                        <div>
+                          <span className='font-medium'>Material Name:</span> {item.productName}
+                        </div>
+                        <div>
+                          <span className='font-medium'>Machine:</span> {item.machineName}
+                        </div>
+                        <div>
+                          <span className='font-medium'>Specifications:</span> {item.specifications || 'N/A'}
+                        </div>
+                        <div>
+                          <span className='font-medium'>Current Stock:</span> {item.oldStock}
+                        </div>
+                        <div>
+                          <span className='font-medium'>Requested Quantity:</span> {item.reqQuantity} {item.measureUnit}
+                        </div>
+                        <div>
+                          <span className='font-medium'>Notes:</span> {item.notes || 'N/A'}
+                        </div>
+                      </div>
+
+                      {/* Vendor Quotations */}
+                      {item.vendorQuotations && item.vendorQuotations.length > 0 && (
+                        <div className='mt-4'>
+                          <h5 className='font-semibold mb-3'>Vendor Quotations</h5>
+                          <div className='space-y-3'>
+                            {item.vendorQuotations.map((quotation, qIndex) => (
+                              <div 
+                                key={quotation.id} 
+                                className={`p-3 rounded-lg border ${
+                                  quotation.isSelected 
+                                    ? 'bg-green-50 border-green-200' 
+                                    : 'bg-gray-50 border-gray-200'
+                                }`}
+                              >
+                                <div className='flex justify-between items-start mb-2'>
+                                  <h6 className='font-medium'>{quotation.vendorName}</h6>
+                                  {quotation.isSelected && (
+                                    <Badge className='bg-green-600'>Selected</Badge>
+                                  )}
+                                </div>
+                                <div className='grid grid-cols-2 gap-2 text-sm'>
+                                  <div>
+                                    <span className='font-medium'>Contact Person:</span> {quotation.contactPerson}
+                                  </div>
+                                  <div>
+                                    <span className='font-medium'>Phone:</span> {quotation.phone}
+                                  </div>
+                                  <div>
+                                    <span className='font-medium'>Price per Unit:</span> ₹{quotation.price}
+                                  </div>
+                                  <div>
+                                    <span className='font-medium'>Total Amount:</span> {quotation.quotedPrice}
+                                  </div>
+                                  {quotation.notes && (
+                                    <div className='col-span-2'>
+                                      <span className='font-medium'>Notes:</span> {quotation.notes}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Additional Notes */}
+                {requestData.apiData?.additionalNotes && (
+                  <div className='bg-blue-50 p-4 rounded-lg'>
+                    <h3 className='font-semibold mb-2'>Additional Notes</h3>
+                    <p className='text-sm'>{requestData.apiData.additionalNotes}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Dialog Actions */}
+          <div className='flex justify-end gap-3 pt-4 border-t'>
+            <Button
+              variant='outline'
+              onClick={() => setIsPrintDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                window.print();
+                setIsPrintDialogOpen(false);
+              }}
+              className='gap-2'
+            >
+              <Printer className='w-4 h-4' />
+              Print
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

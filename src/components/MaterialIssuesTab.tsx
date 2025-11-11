@@ -253,8 +253,37 @@ export const MaterialIssuesTab = () => {
           bValue = parseInt(b.id) || 0;
           break;
         case 'issueDate':
-          aValue = new Date(a.issuedDate).getTime();
-          bValue = new Date(b.issuedDate).getTime();
+          // Handle date sorting with proper validation
+          // Empty dates should sort to the end regardless of sort order
+          const parseIssueDate = (dateStr: string): number => {
+            if (!dateStr || !dateStr.trim()) {
+              // Return a very large number so empty dates sort to the end
+              return Number.MAX_SAFE_INTEGER;
+            }
+            
+            // Try parsing the date
+            const parsed = new Date(dateStr).getTime();
+            
+            // Check if the date is valid
+            if (isNaN(parsed)) {
+              // If invalid, try to parse as DD-MM-YYYY format
+              if (dateStr.includes('-') && dateStr.length === 10) {
+                const parts = dateStr.split('-');
+                if (parts.length === 3 && parts[0].length === 2) {
+                  // DD-MM-YYYY format
+                  const [day, month, year] = parts;
+                  const isoDate = new Date(`${year}-${month}-${day}`).getTime();
+                  return isNaN(isoDate) ? Number.MAX_SAFE_INTEGER : isoDate;
+                }
+              }
+              return Number.MAX_SAFE_INTEGER;
+            }
+            
+            return parsed;
+          };
+          
+          aValue = parseIssueDate(a.issuedDate || '');
+          bValue = parseIssueDate(b.issuedDate || '');
           break;
         case 'issuedBy':
           aValue = a.issuingPersonName?.toLowerCase() || '';
