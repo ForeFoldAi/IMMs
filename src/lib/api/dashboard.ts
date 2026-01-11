@@ -15,9 +15,20 @@ export interface MaterialExpenseByUnit {
 }
 
 export interface MachineExpenseByUnit {
-  machineType: string;
+  machineName: string;
   unitOneAmount: number;
   unitTwoAmount: number;
+}
+
+export interface RepairMaintenanceExpenseByUnit {
+  machineName: string;
+  unitOneAmount: number;
+  unitTwoAmount: number;
+}
+
+export interface MachineTotalExpense {
+  machineName: string;
+  percentage: number;
 }
 
 export interface DashboardExpensesResponse {
@@ -25,8 +36,17 @@ export interface DashboardExpensesResponse {
   unitOneExpenses: ExpenseData;
   unitTwoExpenses: ExpenseData;
   machineExpensesByUnit: MachineExpenseByUnit[];
-  machineTotalExpenses: any[];
+  machineTotalExpenses: MachineTotalExpense[];
   materialExpensesByUnit: MaterialExpenseByUnit[];
+  repairMaintenanceExpensesByUnit: RepairMaintenanceExpenseByUnit[];
+}
+
+export interface RepairMaintenanceStatusCounts {
+  draft: number;
+  pending_approval: number;
+  approved: number;
+  rejected: number;
+  completed: number;
 }
 
 export interface DashboardStats {
@@ -275,6 +295,15 @@ export const dashboardApi = {
     const url = `/dashboard/vehicle-expenses/breakdown${queryString ? `?${queryString}` : ''}`;
 
     const response = await api.get<VehicleExpenseBreakdown[]>(url);
+    return response.data;
+  },
+
+  /**
+   * Get repair and maintenance status counts
+   * GET /dashboard/repair-maintenance-status-counts
+   */
+  getRepairMaintenanceStatusCounts: async (): Promise<RepairMaintenanceStatusCounts> => {
+    const response = await api.get<RepairMaintenanceStatusCounts>('/dashboard/repair-maintenance-status-counts');
     return response.data;
   }
 };

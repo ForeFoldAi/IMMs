@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, List, Table, Package, Settings, FileText, ClipboardList, Factory, Hourglass, ArrowUpRight, ShoppingBasket } from "lucide-react";
+import { Plus, Search, List, Table, Package, Settings, FileText, ClipboardList, Factory, Hourglass, ArrowUpRight, ShoppingBasket, Wrench } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
@@ -7,6 +7,7 @@ import { MaterialsTab } from "../components/MaterialsTab";
 import { MachinesTab } from "../components/MachinesTab";
 import { MaterialIssuesTab } from "../components/MaterialIssuesTab";
 import { MaterialOrderBookTab } from "@/components/MaterialOrderBookTab";
+import { RepairMaintenanceTab } from "../components/repair & maintenance/RepairMaintenanceTab";
 import { Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 const MaterialsInventory = () => {
@@ -23,8 +24,8 @@ const MaterialsInventory = () => {
     return localStorage.getItem('materials-inventory-active-tab') || "materials";
   });
   
-  // Check if we're on a nested route (like material-request)
-  const isNestedRoute = location.pathname.includes('/material-request');
+  // Check if we're on a nested route (like material-request or repair-maintenance-order)
+  const isNestedRoute = location.pathname.includes('/material-request') || location.pathname.includes('/repair-maintenance-order');
   
   // Handle state parameter for active tab (from back navigation)
   useEffect(() => {
@@ -67,7 +68,7 @@ const MaterialsInventory = () => {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         {/* Desktop Tabs - Top positioned with responsive sizing */}
-        <TabsList className="hidden sm:grid w-full md:w-11/12 lg:w-5/6 xl:w-4/5 2xl:w-3/4 grid-cols-4 h-auto p-1.5 bg-secondary/10 rounded-lg shadow-sm gap-1">
+        <TabsList className="hidden sm:grid w-full md:w-11/12 lg:w-5/6 xl:w-4/5 2xl:w-3/4 grid-cols-5 h-auto p-1.5 bg-secondary/10 rounded-lg shadow-sm gap-1">
            <TabsTrigger 
             value="materials" 
             className="flex flex-row items-center justify-center gap-1.5 md:gap-2 px-2 md:px-3 lg:px-4 py-2 md:py-2.5 text-[11px] md:text-xs lg:text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm transition-all duration-200"
@@ -105,43 +106,59 @@ const MaterialsInventory = () => {
             <Factory className="w-3.5 h-3.5 md:w-4 md:h-4 lg:w-4.5 lg:h-4.5" />
             <span className="whitespace-nowrap">Machines</span>
           </TabsTrigger>
+
+          <TabsTrigger 
+            value="repair-maintenance" 
+            className="flex flex-row items-center justify-center gap-1.5 md:gap-2 px-2 md:px-3 lg:px-4 py-2 md:py-2.5 text-[11px] md:text-xs lg:text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm transition-all duration-200"
+          >
+            <Wrench className="w-3.5 h-3.5 md:w-4 md:h-4 lg:w-4.5 lg:h-4.5" />
+            <span className="whitespace-nowrap">Repairs & Maintenance</span>
+          </TabsTrigger>
         </TabsList>
 
         {/* Mobile Tabs - Fixed at Bottom */}
-        <TabsList className="sm:hidden fixed bottom-0 left-0 right-0 z-40 grid grid-cols-4 h-auto p-2 bg-gradient-to-r from-foreground to-foreground backdrop-blur-xl shadow-2xl border-t border-warning/20">
+        <TabsList className="sm:hidden fixed bottom-0 left-0 right-0 z-40 grid grid-cols-5 h-auto p-2 bg-[#F6D7A0] backdrop-blur-xl shadow-2xl border-t border-warning/20">
           <TabsTrigger 
             value="materials" 
-            className="flex flex-col items-center gap-1 px-1 py-2 text-xs font-semibold data-[state=active]:bg-warning data-[state=active]:text-foreground data-[state=active]:shadow-sm text-white/70 data-[state=inactive]:text-white/70"
+            className="flex flex-col items-center gap-1 px-1 py-2 text-xs font-semibold text-black data-[state=active]:bg-warning data-[state=active]:text-black data-[state=active]:shadow-sm"
           >
-            <Hourglass className="w-5 h-5" />
+            <Hourglass className="w-5 h-5 text-black" />
             <span className="text-[10px] leading-tight">Stock</span>
           </TabsTrigger>
           
           <TabsTrigger 
             value="material-issues" 
-            className="flex flex-col items-center gap-1 px-1 py-2 text-xs font-semibold data-[state=active]:bg-warning data-[state=active]:text-foreground data-[state=active]:shadow-sm text-white/70 data-[state=inactive]:text-white/70"
+            className="flex flex-col items-center gap-1 px-1 py-2 text-xs font-semibold text-black data-[state=active]:bg-warning data-[state=active]:text-black data-[state=active]:shadow-sm"
           >
             <span className="relative w-5 h-5">
-              <Package className="w-5 h-5" />
-              <ArrowUpRight className="w-2 h-2 absolute -top-1 -right-1" />
+              <Package className="w-5 h-5 text-black" />
+              <ArrowUpRight className="w-2 h-2 absolute -top-1 -right-1 text-black" />
             </span>
             <span className="text-[10px] leading-tight">Issues</span>
           </TabsTrigger>
           
           <TabsTrigger 
             value="material-order-book" 
-            className="flex flex-col items-center gap-1 px-1 py-2 text-xs font-semibold data-[state=active]:bg-warning data-[state=active]:text-foreground data-[state=active]:shadow-sm text-white/70 data-[state=inactive]:text-white/70"
+            className="flex flex-col items-center gap-1 px-1 py-2 text-xs font-semibold text-black data-[state=active]:bg-warning data-[state=active]:text-black data-[state=active]:shadow-sm"
           >
-            <ShoppingBasket className="w-5 h-5" />
+            <ShoppingBasket className="w-5 h-5 text-black" />
             <span className="text-[10px] leading-tight">Purchased</span>
           </TabsTrigger>
 
           <TabsTrigger 
             value="machines" 
-            className="flex flex-col items-center gap-1 px-1 py-2 text-xs font-semibold data-[state=active]:bg-warning data-[state=active]:text-foreground data-[state=active]:shadow-sm text-white/70 data-[state=inactive]:text-white/70"
+            className="flex flex-col items-center gap-1 px-1 py-2 text-xs font-semibold text-black data-[state=active]:bg-warning data-[state=active]:text-black data-[state=active]:shadow-sm"
           >
-            <Factory className="w-5 h-5" />
+            <Factory className="w-5 h-5 text-black" />
             <span className="text-[10px] leading-tight">Machines</span>
+          </TabsTrigger>
+
+          <TabsTrigger 
+            value="repair-maintenance" 
+            className="flex flex-col items-center gap-1 px-1 py-2 text-xs font-semibold text-black data-[state=active]:bg-warning data-[state=active]:text-black data-[state=active]:shadow-sm"
+          >
+            <Wrench className="w-5 h-5 text-black" />
+            <span className="text-[10px] leading-tight">Repair</span>
           </TabsTrigger>
         </TabsList>
 
@@ -165,6 +182,11 @@ const MaterialsInventory = () => {
           {/* Machines Tab */}
           <div className={activeTab === "machines" ? "block" : "hidden"}>
           <MachinesTab />
+          </div>
+
+          {/* Repair and Maintenance Tab */}
+          <div className={activeTab === "repair-maintenance" ? "block" : "hidden"}>
+          <RepairMaintenanceTab />
           </div>
         </div>
       </Tabs>

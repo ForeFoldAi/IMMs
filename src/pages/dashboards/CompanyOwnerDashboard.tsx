@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import type { MouseEvent } from "react";
 import { IndianRupee, Calendar, AlertCircle, Building2, Loader2, WifiOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend } from "../../components/ui/chart";
@@ -32,6 +33,7 @@ const CompanyOwnerDashboard = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
+  const [repairMaintenanceStatusCounts, setRepairMaintenanceStatusCounts] = useState<any>(null);
   const [windowWidth, setWindowWidth] = useState(() => 
     typeof window !== 'undefined' ? window.innerWidth : 1024
   );
@@ -147,6 +149,25 @@ const CompanyOwnerDashboard = () => {
     } catch (err) {
       console.error('Error fetching pending approvals:', err);
       // Keep the current count on error
+    }
+  };
+
+  // Fetch repair maintenance status counts
+  const fetchRepairMaintenanceStatusCounts = async (useCache: boolean = true) => {
+    const cacheKey = 'dashboard-repair-maintenance-status-counts';
+    
+    if (useCache && cache.has(cacheKey)) {
+      setRepairMaintenanceStatusCounts(cache.get(cacheKey));
+      return;
+    }
+
+    try {
+      const response = await dashboardApi.getRepairMaintenanceStatusCounts();
+      setRepairMaintenanceStatusCounts(response);
+      cache.set(cacheKey, response, 2 * 60 * 1000); // Cache for 2 minutes
+    } catch (err) {
+      console.error('Error fetching repair maintenance status counts:', err);
+      // Keep the current counts on error
     }
   };
 
@@ -285,7 +306,8 @@ const CompanyOwnerDashboard = () => {
         fetchMaterials(true),
         fetchExpensesData(true),
         fetchFleetExpensesData(true),
-        fetchPendingApprovals(true)
+        fetchPendingApprovals(true),
+        fetchRepairMaintenanceStatusCounts(true)
       ]);
       
       // If this is the initial load and we have cached data, mark as initialized
@@ -302,7 +324,8 @@ const CompanyOwnerDashboard = () => {
             fetchMaterials(false),
             fetchExpensesData(false),
             fetchFleetExpensesData(false),
-            fetchPendingApprovals(false)
+            fetchPendingApprovals(false),
+            fetchRepairMaintenanceStatusCounts(false)
           ]);
         } catch (err) {
           console.warn('Background data update failed:', err);
@@ -322,14 +345,21 @@ const CompanyOwnerDashboard = () => {
   const getPendingApprovalsData = () => {
     // Only return real data from API - no mock values
     return {
-      pendingApprovals: pendingApprovalsCount || 0,
+      materialRequests: pendingApprovalsCount || 0,
+      repairMaintenance: repairMaintenanceStatusCounts?.pending_approval || 0,
     };
   };
 
-  // Handle navigation to pending approvals
-  const handlePendingApprovalsClick = () => {
-    // Navigate to materials inventory with material-order-book tab and pending filter
+  // Handle navigation to material requests pending approvals
+  const handleMaterialRequestsClick = (e: MouseEvent) => {
+    e.stopPropagation();
     navigate('/materials-inventory?tab=material-order-book&filter=pending_approval');
+  };
+
+  // Handle navigation to repair maintenance pending approvals
+  const handleRepairMaintenanceClick = (e: MouseEvent) => {
+    e.stopPropagation();
+    navigate('/materials-inventory?tab=repair-maintenance&filter=pending_approval');
   };
 
   // Generate vehicle expenses data from fleet API data
@@ -397,10 +427,71 @@ const CompanyOwnerDashboard = () => {
     return ticks;
   };
 
-  // Get totals from API data only
+  // Get totals from API data - handle new API structure with expensesByBranch
   const allUnitsTotal = expensesData?.totalExpenses?.total || 0;
-  const unitOneTotal = expensesData?.unitOneExpenses?.total || 0;
-  const unitTwoTotal = expensesData?.unitTwoExpenses?.total || 0;
+  
+  // Extract branch totals from expensesByBranch object
+  // Map branch IDs to their expense totals
+  const getBranchTotal = (branchId: number) => {
+    if (!expensesData?.expensesByBranch) return 0;
+    return expensesData.expensesByBranch[branchId.toString()]?.total || 0;
+  };
+
+  // Get totals for first two branches (assuming they're ordered)
+  const unitOneTotal = branches.length > 0 ? getBranchTotal(branches[0].id) : 0;
+  const unitTwoTotal = branches.length > 1 ? getBranchTotal(branches[1].id) : 0;
+
+  // Calculate material expenses - handle new API structure with branchExpenses
+  const calculateMaterialExpenses = (unit: 'all' | 'unitOne' | 'unitTwo') => {
+    if (!expensesData?.materialExpensesByUnit) return 0;
+    return expensesData.materialExpensesByUnit.reduce((sum: number, item: any) => {
+      const branchExpenses = item.branchExpenses || {};
+      
+      if (unit === 'all') {
+        // Sum all branch expenses
+        return sum + Object.values(branchExpenses as Record<string, number>).reduce((branchSum: number, amount: unknown) => 
+          branchSum + (Number(amount) || 0), 0
+        );
+      } else if (unit === 'unitOne') {
+        // Get expense for first branch
+        const branchId = branches.length > 0 ? branches[0].id.toString() : null;
+        return sum + (branchId ? (Number(branchExpenses[branchId]) || 0) : 0);
+      } else {
+        // Get expense for second branch
+        const branchId = branches.length > 1 ? branches[1].id.toString() : null;
+        return sum + (branchId ? (Number(branchExpenses[branchId]) || 0) : 0);
+      }
+    }, 0);
+  };
+
+  const calculateRepairMaintenanceExpenses = (unit: 'all' | 'unitOne' | 'unitTwo') => {
+    if (!expensesData?.repairMaintenanceExpensesByUnit) return 0;
+    return expensesData.repairMaintenanceExpensesByUnit.reduce((sum: number, item: any) => {
+      const branchExpenses = item.branchExpenses || {};
+      
+      if (unit === 'all') {
+        // Sum all branch expenses
+        return sum + Object.values(branchExpenses as Record<string, number>).reduce((branchSum: number, amount: unknown) => 
+          branchSum + (Number(amount) || 0), 0
+        );
+      } else if (unit === 'unitOne') {
+        // Get expense for first branch
+        const branchId = branches.length > 0 ? branches[0].id.toString() : null;
+        return sum + (branchId ? (Number(branchExpenses[branchId]) || 0) : 0);
+      } else {
+        // Get expense for second branch
+        const branchId = branches.length > 1 ? branches[1].id.toString() : null;
+        return sum + (branchId ? (Number(branchExpenses[branchId]) || 0) : 0);
+      }
+    }, 0);
+  };
+
+  const allUnitsMaterialExpenses = calculateMaterialExpenses('all');
+  const allUnitsRMExpenses = calculateRepairMaintenanceExpenses('all');
+  const unitOneMaterialExpenses = calculateMaterialExpenses('unitOne');
+  const unitOneRMExpenses = calculateRepairMaintenanceExpenses('unitOne');
+  const unitTwoMaterialExpenses = calculateMaterialExpenses('unitTwo');
+  const unitTwoRMExpenses = calculateRepairMaintenanceExpenses('unitTwo');
 
 
   const getPeriodLabel = () => {
@@ -546,28 +637,51 @@ const CompanyOwnerDashboard = () => {
             </div>
           </Card>
 
-          {/* Total Material Expenses - All Units */}
+          {/* Total Expenses - All Units */}
           <Card className="p-4 sm:p-5 border-l-4 border-l-green-500 min-w-0 hover:shadow-md transition-shadow">
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight break-words">Total Material Expenses - All Units</p>
+                  <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight whitespace-nowrap">Total Expenses - All Units</p>
                 </div>
                 <IndianRupee className="h-5 w-5 sm:h-6 sm:w-6 text-green-500 flex-shrink-0 mt-0.5" />
               </div>
               <p className="text-xl sm:text-2xl font-bold leading-tight break-words text-green-700 dark:text-green-400">₹{allUnitsTotal.toLocaleString()}</p>
-              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight break-words">
-                {branches.length > 0 ? branches.map(b => b.name).join(', ') : 'All Branches'}
-              </p>
+              <div className="pt-2 space-y-1.5">
+                <div className="grid grid-cols-2 gap-2.5 items-start">
+                  <div className="flex flex-col items-start">
+                    <p className="text-[10px] sm:text-xs text-muted-foreground/80 leading-tight">Materials</p>
+                    <p className="text-xs sm:text-sm font-semibold text-muted-foreground leading-tight mt-0.5">₹{allUnitsMaterialExpenses.toLocaleString()}</p>
+                  </div>
+                  <div className="flex flex-col items-start border-l border-muted-foreground/30 pl-2.5">
+                    <p className="text-[10px] sm:text-xs text-muted-foreground/80 leading-tight">Repairs & Maintenance</p>
+                    <p className="text-xs sm:text-sm font-semibold text-muted-foreground leading-tight mt-0.5">₹{allUnitsRMExpenses.toLocaleString()}</p>
+                  </div>
+                </div>
+                <p className="text-[10px] sm:text-xs text-muted-foreground/70 leading-tight pt-0.5">
+                  {branches.length > 0 ? branches.map(b => b.name).join(', ') : 'All Branches'}
+                </p>
+              </div>
             </div>
           </Card>
 
           {/* Dynamic Branch Cards */}
           {branches.map((branch, index) => {
-            const branchTotal = index === 0 ? unitOneTotal : unitTwoTotal;
+            const branchTotal = getBranchTotal(branch.id);
             const borderColor = index === 0 ? 'border-l-blue-500' : 'border-l-orange-500';
             const iconColor = index === 0 ? 'text-blue-500' : 'text-orange-500';
-            const periodData = index === 0 ? expensesData?.unitOneExpenses : expensesData?.unitTwoExpenses;
+            const periodData = expensesData?.expensesByBranch?.[branch.id.toString()];
+            
+            // Calculate material and RM expenses for this specific branch
+            const materialExpenses = expensesData?.materialExpensesByUnit?.reduce((sum: number, item: any) => {
+              const branchExpenses = item.branchExpenses || {};
+              return sum + (Number(branchExpenses[branch.id.toString()]) || 0);
+            }, 0) || 0;
+            
+            const rmExpenses = expensesData?.repairMaintenanceExpensesByUnit?.reduce((sum: number, item: any) => {
+              const branchExpenses = item.branchExpenses || {};
+              return sum + (Number(branchExpenses[branch.id.toString()]) || 0);
+            }, 0) || 0;
             
             return (
               <Card key={branch.id} className={`p-4 sm:p-5 border-l-4 ${borderColor} min-w-0 hover:shadow-md transition-shadow`}>
@@ -575,34 +689,63 @@ const CompanyOwnerDashboard = () => {
                   <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                       <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight break-words">
-                        Total Material Expenses - {branch.name}
+                        Total Expenses - Unit {index + 1}
                       </p>
                     </div>
                     <Building2 className={`h-5 w-5 sm:h-6 sm:w-6 ${iconColor} flex-shrink-0 mt-0.5`} />
                   </div>
                   <p className={`text-xl sm:text-2xl font-bold leading-tight break-words ${index === 0 ? 'text-blue-700 dark:text-blue-400' : 'text-orange-700 dark:text-orange-400'}`}>₹{branchTotal.toLocaleString()}</p>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight break-words">
-                    {branch.location || periodData?.period || 'N/A'}
-                  </p>
+                  <div className="pt-2 space-y-1.5">
+                    <div className="grid grid-cols-2 gap-2.5 items-start">
+                      <div className="flex flex-col items-start">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground/80 leading-tight">Materials</p>
+                        <p className="text-xs sm:text-sm font-semibold text-muted-foreground leading-tight mt-0.5">₹{materialExpenses.toLocaleString()}</p>
+                      </div>
+                      <div className="flex flex-col items-start border-l border-muted-foreground/30 pl-2.5">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground/80 leading-tight">Repairs & Maintenance</p>
+                        <p className="text-xs sm:text-sm font-semibold text-muted-foreground leading-tight mt-0.5">₹{rmExpenses.toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground/70 leading-tight pt-0.5">
+                      {branch.location || 'N/A'}
+                    </p>
+                  </div>
                 </div>
               </Card>
             );
           })}
 
-          {/* Pending Approvals - Material Requests */}
-          <Card 
-            className="p-4 sm:p-5 border-l-4 border-l-amber-500 cursor-pointer hover:shadow-lg transition-all duration-200 hover:bg-amber-50/50 dark:hover:bg-amber-950/20 min-w-0"
-            onClick={handlePendingApprovalsClick}
-          >
-            <div className="flex flex-col gap-2.5">
+          {/* Pending Approvals */}
+          <Card className="p-4 sm:p-5 border-l-4 border-l-amber-500 min-w-0 hover:shadow-md transition-shadow">
+            <div className="flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight break-words">Pending Approvals</p>
                 </div>
                 <AlertCircle className="h-5 w-5 sm:h-6 sm:w-6 text-amber-500 flex-shrink-0 mt-0.5" />
               </div>
-              <p className="text-xl sm:text-2xl font-bold leading-tight text-amber-700 dark:text-amber-400">{pendingApprovalsData.pendingApprovals}</p>
-              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight break-words">Material Requests</p>
+              <div className="pt-2">
+                <div className="grid grid-cols-2 gap-2.5 items-center">
+                  <div className="flex flex-col items-start">
+                    <p 
+                      onClick={handleMaterialRequestsClick}
+                      className="text-xl sm:text-2xl font-bold leading-tight text-amber-700 dark:text-amber-400 cursor-pointer hover:opacity-80 transition-opacity"
+                    >
+                      {pendingApprovalsData.materialRequests}
+                    </p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground/80 leading-tight mt-0.5">Material Request</p>
+                  </div>
+                  <div className="flex flex-col items-start border-l border-muted-foreground/30 pl-2.5">
+                    <p 
+                      onClick={handleRepairMaintenanceClick}
+                      className="text-xl sm:text-2xl font-bold leading-tight text-amber-700 dark:text-amber-400 cursor-pointer hover:opacity-80 transition-opacity"
+                    >
+                      {pendingApprovalsData.repairMaintenance}
+                    </p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground/80 leading-tight mt-0.5">Repairs & Maintenance</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </Card>
         </div>
@@ -761,3 +904,4 @@ const CompanyOwnerDashboard = () => {
 };
 
 export default CompanyOwnerDashboard;
+

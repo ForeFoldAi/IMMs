@@ -553,3 +553,176 @@ export interface CreateVehicleExpenseRequest {
   additionalNotes?: string;
   files?: File[];
 }
+
+// Employee Management Enums
+export enum EmploymentType {
+  PERMANENT = 'permanent',
+  CONTRACT = 'contract',
+  TEMPORARY = 'temporary',
+  INTERN = 'intern',
+  TERMINATED = 'terminated',
+}
+
+export enum Gender {
+  MALE = 'male',
+  FEMALE = 'female',
+  
+}
+
+export enum MaritalStatus {
+  SINGLE = 'single',
+  MARRIED = 'married',
+ 
+}
+
+export enum AttendanceStatus {
+  PRESENT = 'present',
+  ABSENT = 'absent',
+  
+}
+
+// Employee Management Types
+export interface Employee {
+  id: number;
+  employeeId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  dateOfBirth: string;
+  gender: Gender;
+  maritalStatus: MaritalStatus;
+  address: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  joiningDate: string;
+  employmentType: EmploymentType;
+  companyId: number;
+  branchId: number;
+  departmentId: number;
+  positionId: number;
+  createdAt: string;
+  updatedAt: string;
+  company?: Company;
+  branch?: Branch;
+  department?: Department;
+  position?: Position;
+}
+
+export interface CreateEmployeeRequest {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  dateOfBirth: string;
+  gender: Gender;
+  maritalStatus: MaritalStatus;
+  address: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  joiningDate: string;
+  employmentType: EmploymentType;
+  companyId: number;
+  branchId: number;
+  departmentId: number;
+  positionId: number;
+}
+
+export interface Department {
+  id: number;
+  name: string;
+  description: string;
+  companyId: number;
+  createdAt: string;
+  updatedAt: string;
+  company?: Company;
+}
+
+export interface CreateDepartmentRequest {
+  name: string;
+  description: string;
+  companyId: number;
+}
+
+export interface Position {
+  id: number;
+  name: string;
+  description: string;
+  companyId: number;
+  createdAt: string;
+  updatedAt: string;
+  company?: Company;
+}
+
+export interface CreatePositionRequest {
+  name: string;
+  description: string;
+  companyId: number;
+}
+
+export interface AttendanceRecord {
+  day: number;
+  status: AttendanceStatus;
+  remark: string | null;
+}
+
+export interface Attendance {
+  id: number;
+  employeeId: number;
+  year: number;
+  month: number;
+  records: AttendanceRecord[];
+  remark?: string | null; // Month-level remark (one per month per employee)
+  createdAt: string;
+  updatedAt: string;
+  employee?: Employee;
+}
+
+export interface CreateAttendanceRequest {
+  employeeId: number;
+  year: number;
+  month: number;
+  records: AttendanceRecord[];
+  remark?: string | null; // Month-level remark (one per month per employee)
+}
+
+export interface MarkAllPresentRequest {
+  companyId: number;
+  year: number;
+  month: number;
+  day: number;
+  branchId: number;
+}
+
+export interface UpdateEmployeeRequest {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phoneNumber?: string;
+  dateOfBirth?: string;
+  gender?: Gender;
+  maritalStatus?: MaritalStatus;
+  address?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+  joiningDate?: string;
+  employmentType?: EmploymentType;
+  companyId?: number;
+  branchId?: number;
+  departmentId?: number;
+  positionId?: number;
+}
+
+export interface UpdateAttendanceRequest {
+  employeeId?: number;
+  year?: number;
+  month?: number;
+  records?: AttendanceRecord[];
+  remark?: string | null; // Month-level remark (one per month per employee)
+}

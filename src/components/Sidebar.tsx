@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Truck,
+  Users,
 } from 'lucide-react';
 import { useRole } from '../contexts/RoleContext';
 import { useSidebar } from '../contexts/SidebarContext';
@@ -56,6 +57,12 @@ export const Sidebar = () => {
         label: 'Fleet Management',
         icon: Truck,
         permission: 'inventory:material-indents:create',
+      },
+      {
+        to: '/employee-management',
+        label: 'Employee Management',
+        icon: Users,
+        permission: null, // Add specific permission if needed
       },
       // Example: enable more entries as needed
       // {
